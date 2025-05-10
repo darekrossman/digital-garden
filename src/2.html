@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generative WebGPU & Audio Ecosystem v7.3 (Analysis Shader Fix)</title>
+    <style>
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: #010102; cursor: none; }
+        canvas { display: block; width: 100%; height: 100%; }
+        #info { position: fixed; bottom: 10px; left: 10px; color: rgba(200, 200, 220, 0.5); font-family: monospace; font-size: 11px; pointer-events: none; text-shadow: 0 0 4px #000; }
+    </style>
+</head>
+<body>
+    <canvas id="webgpuCanvas"></canvas>
+    <div id="info">Generative audiovisual system. Move mouse to gently perturb.</div>
+
+    <script type="module">
+        async function main() {
+            const canvas = document.getElementById('webgpuCanvas');
+            const infoElement = document.getElementById('info');
+
+            if (!navigator.gpu) { infoElement.textContent = "WebGPU not supported."; return; }
+            const adapter = await navigator.gpu.requestAdapter();
+            if (!adapter) { infoElement.textContent = "No GPU adapter."; return; }
+            const device = await adapter.requestDevice();
+            const context = canvas.getContext('webgpu');
+            const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
+            context.configure({ device, format: presentationFormat, alphaMode: 'opaque' });
+
+            const NUM_PARTICLES = 60000;
+            let currentParticleBaseColor = [0.7, 0.5, 0.9]; 
+            const glitchInterval = 15000;
+            let lastGlitchTime = 0;
+            let isGlitching = false;
+            
+            const mousePos = { x: 0.5, y: 0.5, active: false };
+            let currentAspectRatio = canvas.clientWidth / canvas.clientHeight || 1;
+
+            window.addEventListener('mousemove', (e) => { mousePos.x = e.clientX / window.innerWidth; mousePos.y = e.clientY / window.innerHeight; mousePos.active = true; if (audioContext && audioContext.state === 'suspended') audioContext.resume(); });
+            window.addEventListener('mouseleave', () => mousePos.active = false);
+
+            let audioContext;
+            let analyserNode, masterGainNode, filterNode, pannerNode;
+            let carrierOsc, modulatorOsc, modulatorGain;
+            let droneLFO, droneLFO2, droneLFOGain;
+            let frequencyData;
+            let audioEnergy = 0.0;
+            let fmDroneParams = { carrierFreq: 60, modulatorRatio: 0.5, modulatorIndex: 20, soundComplexity: 0.1 };
+            const feedbackBufferSize = 4 * 4;
+            const feedbackBuffer = device.createBuffer({ size: feedbackBufferSize, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
+            const feedbackReadBuffer = device.createBuffer({ size: feedbackBufferSize, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
+            let particleMetrics = { avgX: 0, avgY: 0, avgSpeed: 0, density: 0 };
+
+            function initAudio() { /* ... same as v7.1 ... */
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyserNode = audioContext.createAnalyser();
+                analyserNode.fftSize = 256;
+                frequencyData = new Uint8Array(analyserNode.frequencyBinCount);
+                masterGainNode = audioContext.createGain();
+                masterGainNode.gain.setValueAtTime(0.15, audioContext.currentTime);
+                filterNode = audioContext.createBiquadFilter();
+                filterNode.type = 'lowpass';
+                filterNode.frequency.setValueAtTime(800, audioContext.currentTime);
+                filterNode.Q.setValueAtTime(0.7, audioContext.currentTime);
+                pannerNode = audioContext.createStereoPanner();
+                pannerNode.pan.setValueAtTime(0, audioContext.currentTime);
+                droneLFO = audioContext.createOscillator();
+                droneLFO.type = 'sine';
+                droneLFO.frequency.setValueAtTime(0.05, audioContext.currentTime);
+                droneLFO2 = audioContext.createOscillator();
+                droneLFO2.type = 'sine';
+                droneLFO2.frequency.setValueAtTime(0.08, audioContext.currentTime);
+                droneLFOGain = audioContext.createGain();
+                droneLFOGain.gain.setValueAtTime(1, audioContext.currentTime);
+                droneLFO.connect(droneLFOGain);
+                carrierOsc = audioContext.createOscillator();
+                modulatorOsc = audioContext.createOscillator();
+                modulatorGain = audioContext.createGain();
+                carrierOsc.type = 'sine';
+                modulatorOsc.type = 'sine';
+                modulatorOsc.connect(modulatorGain);
+                modulatorGain.connect(carrierOsc.frequency);
+                carrierOsc.connect(pannerNode);
+                pannerNode.connect(filterNode);
+                filterNode.connect(masterGainNode);
+                masterGainNode.connect(analyserNode);
+                analyserNode.connect(audioContext.destination);
+                carrierOsc.start(); modulatorOsc.start(); droneLFO.start(); droneLFO2.start();
+            }
+            initAudio();
+            
+            let lastAudioUpdateTime = 0;
+            function updateAudioDrone(time) { /* ... same as v7.1 ... */
+                const now = audioContext.currentTime;
+                if (time - lastAudioUpdateTime < 0.1 && carrierOsc.frequency.value > 0) return; 
+                lastAudioUpdateTime = time;
+                const lfo1Val = droneLFOGain.gain.value * Math.sin(now * droneLFO.frequency.value * 2 * Math.PI);
+                const lfo2Val = droneLFOGain.gain.value * Math.sin(now * droneLFO2.frequency.value * 2 * Math.PI);
+                fmDroneParams.modulatorRatio = 0.1 + particleMetrics.density * 2.0 + lfo1Val * 0.5;
+                fmDroneParams.modulatorIndex = 10 + particleMetrics.avgSpeed * 5000 + lfo2Val * 20;
+                fmDroneParams.carrierFreq = 40 + particleMetrics.avgY * 40 + 60; // Map Y position to pitch
+                fmDroneParams.carrierFreq = Math.max(30, Math.min(200, fmDroneParams.carrierFreq));
+                fmDroneParams.modulatorRatio = Math.max(0.05, Math.min(5, fmDroneParams.modulatorRatio));
+                fmDroneParams.modulatorIndex = Math.max(5, Math.min(fmDroneParams.carrierFreq * 4, fmDroneParams.modulatorIndex));
+                let complexity = (fmDroneParams.modulatorRatio / 5.0) + (fmDroneParams.modulatorIndex / (fmDroneParams.carrierFreq * 5.0));
+                fmDroneParams.soundComplexity = Math.min(1.0, Math.max(0.0, complexity * 0.5));
+                carrierOsc.frequency.linearRampToValueAtTime(fmDroneParams.carrierFreq, now + 0.1);
+                modulatorOsc.frequency.linearRampToValueAtTime(fmDroneParams.carrierFreq * fmDroneParams.modulatorRatio, now + 0.1);
+                modulatorGain.gain.linearRampToValueAtTime(fmDroneParams.modulatorIndex, now + 0.1);
+                filterNode.frequency.linearRampToValueAtTime(200 + audioEnergy * 3000 + mousePos.y * 5000, now + 0.1);
+                filterNode.Q.linearRampToValueAtTime(0.5 + audioEnergy * 5 + (1-mousePos.y)*2, now + 0.1);
+                pannerNode.pan.linearRampToValueAtTime(particleMetrics.avgX * 0.8, now + 0.2); // Pan with avg X
+                if (Math.random() < 0.05) { infoElement.textContent = `CF:${fmDroneParams.carrierFreq.toFixed(0)} MR:${fmDroneParams.modulatorRatio.toFixed(1)} MI:${fmDroneParams.modulatorIndex.toFixed(0)} Comp:${fmDroneParams.soundComplexity.toFixed(2)} P.AvgX:${particleMetrics.avgX.toFixed(2)}`; }
+                const hue = Math.min(1, Math.max(0, (fmDroneParams.carrierFreq - 30) / 170));
+                currentParticleBaseColor = hslToRgb(hue, 0.6 + fmDroneParams.soundComplexity * 0.3, 0.5 + (1.0-fmDroneParams.soundComplexity) * 0.25);
+            }
+            function hslToRgb(h, s, l){ /* ... same as v7.1 ... */  let r, g, b; if(s == 0) { r = g = b = l; } else { const hue2rgb = (p, q, t) => { if(t < 0) t += 1; if(t > 1) t -= 1; if(t < 1/6) return p + (q - p) * 6 * t; if(t < 1/2) return q; if(t < 2/3) return p + (q - p) * (2/3 - t) * 6; return p; }; const q = l < 0.5 ? l * (1 + s) : l + s - l * s; const p = 2 * l - q; r = hue2rgb(p, q, h + 1/3); g = hue2rgb(p, q, h); b = hue2rgb(p, q, h - 1/3); } return [r, g, b]; }
+
+            const particleStructSize = 4;
+            const particleData = new Float32Array(NUM_PARTICLES * particleStructSize);
+            for (let i = 0; i < NUM_PARTICLES; ++i) { const base = i * particleStructSize; particleData[base + 0] = (Math.random() * 2 - 1) * 0.8; particleData[base + 1] = (Math.random() * 2 - 1) * 0.8; particleData[base + 2] = (Math.random() - 0.5) * 0.002; particleData[base + 3] = (Math.random() - 0.5) * 0.002; }
+            const particleBuffer = device.createBuffer({ size: particleData.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+            device.queue.writeBuffer(particleBuffer, 0, particleData);
+
+            const uniformBufferSize = (1 + 2 + 1 + 1 + 1 + 4 + 3 + 4) * 4;
+            const uniformBuffer = device.createBuffer({ size: uniformBufferSize, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+
+            const particleUpdateShaderModule = device.createShaderModule({ code: `/* ... same as v7.1 ... */
+                struct Particle { pos: vec2<f32>, vel: vec2<f32> };
+                @group(0) @binding(0) var<storage, read_write> particles: array<Particle>;
+                struct Uniforms { time: f32, mouseX: f32, mouseY: f32, audioEnergy: f32, isGlitching: f32, aspectRatio: f32, carrierFreq: f32, modRatio: f32, modIndex: f32, soundComplexity: f32, particleBaseR: f32, particleBaseG: f32, particleBaseB: f32, feedback_avgX_gpu: f32, feedback_avgY_gpu: f32, feedback_avgSpeed_gpu: f32, feedback_density_gpu: f32 };
+                @group(0) @binding(1) var<uniform> u: Uniforms;
+                var<private> rand_seed_compute: u32 = 0u;
+                fn random_float_compute() -> f32 { rand_seed_compute = rand_seed_compute * 1664525u + 1013904223u; return f32(rand_seed_compute & 0x00FFFFFFu) / 16777216.0;}
+                @compute @workgroup_size(256) fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
+                    let idx = global_id.x; if (idx >= arrayLength(&particles)) { return; }
+                    rand_seed_compute = idx + u32(u.time * 1000.0 + u.modRatio * u.carrierFreq + global_id.y); var p = particles[idx];
+                    let cosmic_attractor_x = sin(u.time * 0.02 * (1.0 + u.soundComplexity) + u.modRatio * 0.5) * 0.7;
+                    let cosmic_attractor_y = cos(u.time * 0.025 * (1.0 + u.soundComplexity) - u.carrierFreq * 0.001) * 0.7;
+                    let cosmicAttractorPos = vec2<f32>(cosmic_attractor_x * u.aspectRatio, cosmic_attractor_y);
+                    var dirToCosmic = normalize(cosmicAttractorPos - p.pos);
+                    let cosmicForceStrength = (0.00002 + u.soundComplexity * 0.00005) * (1.0 + u.audioEnergy);
+                    let avgParticlePos = vec2<f32>(u.feedback_avgX_gpu * u.aspectRatio, u.feedback_avgY_gpu);
+                    var dirToAvg = normalize(avgParticlePos - p.pos); let distToAvg = distance(p.pos, avgParticlePos);
+                    let gravityStrengthBase = 0.00001 + u.soundComplexity * 0.00008;
+                    let gravityStrength = gravityStrengthBase * (1.0 + u.feedback_density_gpu * 2.0) / (0.1 + distToAvg);
+                    let mouseWorldPos = vec2<f32>((u.mouseX * 2.0 - 1.0) * u.aspectRatio, -(u.mouseY * 2.0 - 1.0));
+                    let distToMouse = distance(p.pos, mouseWorldPos); var mouseForce = vec2<f32>(0.0, 0.0);
+                    if (u.mouseY > 0.01 && distToMouse < 0.3 ) { mouseForce = normalize(p.pos - mouseWorldPos) * (0.3 - distToMouse) * 0.0005 * (1.0 + u.soundComplexity); }
+                    p.vel += dirToCosmic * cosmicForceStrength;
+                    if (u.feedback_avgSpeed_gpu > 0.0001) { p.vel += dirToAvg * gravityStrength; }
+                    p.vel += mouseForce; let damping = 0.99 - u.soundComplexity * 0.01 - u.feedback_avgSpeed_gpu * 5.0;
+                    p.vel *= clamp(damping, 0.95, 0.995); 
+                    if (u.isGlitching > 0.5 && random_float_compute() < 0.005 ) { p.vel += vec2<f32>( (random_float_compute() - 0.5) * 0.05, (random_float_compute() - 0.5) * 0.05 ); }
+                    if (length(p.vel) < 0.00001 && random_float_compute() < 0.0001) { p.vel += vec2<f32>((random_float_compute() - 0.5) * 0.001, (random_float_compute() - 0.5) * 0.001); }
+                    let maxSpeed = 0.02 + u.soundComplexity * 0.01; if (length(p.vel) > maxSpeed) { p.vel = normalize(p.vel) * maxSpeed; }
+                    p.pos += p.vel; let edge_buffer = 0.05;
+                    if (p.pos.x > u.aspectRatio + edge_buffer) { p.pos.x = -u.aspectRatio - edge_buffer + random_float_compute()*0.01; p.vel.x *= -0.3; }
+                    if (p.pos.x < -u.aspectRatio - edge_buffer) { p.pos.x = u.aspectRatio + edge_buffer - random_float_compute()*0.01; p.vel.x *= -0.3; }
+                    if (p.pos.y > 1.0 + edge_buffer) { p.pos.y = -1.0 - edge_buffer + random_float_compute()*0.01; p.vel.y *= -0.3; }
+                    if (p.pos.y < -1.0 - edge_buffer) { p.pos.y = 1.0 + edge_buffer - random_float_compute()*0.01; p.vel.y *= -0.3; }
+                    particles[idx] = p;
+                }`
+            });
+
+            const particleAnalysisShaderModule = device.createShaderModule({ code: `
+                struct Particle { pos: vec2<f32>, vel: vec2<f32> };
+                @group(0) @binding(0) var<storage, read> particles: array<Particle>;
+                
+                struct Uniforms { 
+                    time: f32, mouseX: f32, mouseY: f32, audioEnergy: f32,
+                    isGlitching: f32, aspectRatio: f32,
+                    carrierFreq: f32, modRatio: f32, modIndex: f32, soundComplexity: f32,
+                    particleBaseR: f32, particleBaseG: f32, particleBaseB: f32,
+                    feedback_avgX_gpu: f32, feedback_avgY_gpu: f32, feedback_avgSpeed_gpu: f32, feedback_density_gpu: f32, 
+                };
+                @group(0) @binding(1) var<uniform> u: Uniforms; 
+
+                struct Feedback { avgPos: vec2<f32>, avgSpeed: f32, densityMetric: f32 };
+                @group(0) @binding(2) var<storage, read_write> particle_feedback_out: Feedback;
+
+                let WORKGROUP_SIZE: u32 = 256u;
+                var<workgroup> s_data_pos_x: array<f32, WORKGROUP_SIZE>;
+                var<workgroup> s_data_pos_y: array<f32, WORKGROUP_SIZE>;
+                var<workgroup> s_data_speed: array<f32, WORKGROUP_SIZE>;
+
+                fn distanceSquared(p1: vec2<f32>, p2: vec2<f32>) -> f32 {
+                    let diff = p1 - p2;
+                    return dot(diff, diff);
+                }
+
+                @compute @workgroup_size(WORKGROUP_SIZE)
+                fn main(@builtin(local_invocation_index) local_idx: u32) {
+                    let particleCount = arrayLength(&particles);
+                    if (particleCount == 0u) {
+                        if (local_idx == 0u) {
+                            particle_feedback_out.avgPos = vec2<f32>(0.0, 0.0);
+                            particle_feedback_out.avgSpeed = 0.0;
+                            particle_feedback_out.densityMetric = 0.0;
+                        }
+                        return; 
+                    }
+
+                    var local_p_x_sum: f32 = 0.0;
+                    var local_p_y_sum: f32 = 0.0;
+                    var local_s_sum: f32 = 0.0;
+
+                    for (var i = local_idx; i < particleCount; i = i + WORKGROUP_SIZE) {
+                        let p = particles[i];
+                        local_p_x_sum = local_p_x_sum + p.pos.x;
+                        local_p_y_sum = local_p_y_sum + p.pos.y;
+                        local_s_sum = local_s_sum + length(p.vel);
+                    }
+                    
+                    s_data_pos_x[local_idx] = local_p_x_sum;
+                    s_data_pos_y[local_idx] = local_p_y_sum;
+                    s_data_speed[local_idx] = local_s_sum;
+                    workgroupBarrier();
+
+                    if (local_idx == 0u) {
+                        var total_pos_x: f32 = 0.0;
+                        var total_pos_y: f32 = 0.0;
+                        var total_speed: f32 = 0.0;
+                        for (var i = 0u; i < WORKGROUP_SIZE; i = i + 1u) {
+                            total_pos_x = total_pos_x + s_data_pos_x[i];
+                            total_pos_y = total_pos_y + s_data_pos_y[i];
+                            total_speed = total_speed + s_data_speed[i];
+                        }
+                        
+                        let f_particleCount = f32(particleCount);
+                        let avgP = vec2<f32>(total_pos_x / f_particleCount, total_pos_y / f_particleCount);
+                        particle_feedback_out.avgPos = avgP;
+                        particle_feedback_out.avgSpeed = total_speed / f_particleCount;
+                        
+                        var temp_density_sum: f32 = 0.0;
+                        for (var j = local_idx; j < particleCount; j = j + WORKGROUP_SIZE) { // Share density calculation across threads
+                            let p_pos = particles[j].pos;
+                            let dist_sq = distanceSquared(p_pos, avgP);
+                            if (dist_sq > 0.0001) { 
+                                temp_density_sum = temp_density_sum + (1.0 / dist_sq);
+                            }
+                        }
+                        // Store partial sum for density in shared memory
+                        s_data_speed[local_idx] = temp_density_sum; // Re-using s_data_speed for density partial sum
+                        workgroupBarrier();
+
+                        if (local_idx == 0u) { // One thread sums up partial density sums
+                            var final_density_sum : f32 = 0.0;
+                            for(var k = 0u; k < WORKGROUP_SIZE; k = k+1u) {
+                                final_density_sum = final_density_sum + s_data_speed[k];
+                            }
+                            particle_feedback_out.densityMetric = final_density_sum / f_particleCount; 
+                        }
+                    }
+                }`
+            });
+            
+            const renderShaderModule = device.createShaderModule({ code: `/* ... same as v7.1 ... */
+                struct Particle { pos: vec2<f32>, vel: vec2<f32> };
+                @group(0) @binding(0) var<storage, read> particles: array<Particle>;
+                struct Uniforms { time: f32, mouseX: f32, mouseY: f32, audioEnergy: f32, isGlitching: f32, aspectRatio: f32, carrierFreq: f32, modRatio: f32, modIndex: f32, soundComplexity: f32, particleBaseR: f32, particleBaseG: f32, particleBaseB: f32, feedback_avgX_gpu: f32, feedback_avgY_gpu: f32, feedback_avgSpeed_gpu: f32, feedback_density_gpu: f32 };
+                @group(0) @binding(1) var<uniform> u: Uniforms;
+                var<private> rand_seed_render: u32 = 0u;
+                fn random_float() -> f32 { rand_seed_render = rand_seed_render * 1664525u + 1013904223u; return f32(rand_seed_render & 0x00FFFFFFu) / 16777216.0; }
+                struct VertexOutput { @builtin(position) position: vec4<f32>, @location(0) color: vec4<f32> };
+                @vertex fn vs_main(@builtin(vertex_index) vertex_idx: u32) -> VertexOutput {
+                    var out: VertexOutput; rand_seed_render = vertex_idx + u32(u.time * 1337.0 + u.carrierFreq);
+                    let p = particles[vertex_idx]; out.position = vec4<f32>(p.pos.x / u.aspectRatio, p.pos.y, 0.0, 1.0);
+                    let speed = length(p.vel); var baseColor = vec3<f32>(u.particleBaseR, u.particleBaseG, u.particleBaseB);
+                    let color_variation = u.soundComplexity * 0.2 + speed * 20.0;
+                    var R = baseColor.r + sin(p.pos.x * 5.0 + u.time * u.modRatio * 0.1) * color_variation;
+                    var G = baseColor.g + cos(p.pos.y * 5.0 + u.time * 0.1) * color_variation;
+                    var B = baseColor.b + sin(length(p.pos) * 2.0 - u.time * u.carrierFreq * 0.0005) * color_variation;
+                    if (u.isGlitching > 0.5 && random_float() < 0.02 ) { R = random_float(); G = random_float(); B = random_float(); }
+                    var alpha = clamp(0.02 + u.audioEnergy * 0.6 + speed * 30.0 + u.soundComplexity * 0.2, 0.0, 0.7);
+                    out.color = vec4<f32>(clamp(R,0.0,1.0), clamp(G,0.0,1.0), clamp(B,0.0,1.0), alpha); return out;
+                }
+                @fragment fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> { return in.color; }`
+            });
+
+            // Bind Group Layouts and Pipelines (labels added for easier debugging)
+            const particleUpdateBindGroupLayout = device.createBindGroupLayout({label: "UpdateBGL", entries: [ { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } }, { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } } ]});
+            const particleAnalysisBindGroupLayout = device.createBindGroupLayout({label: "AnalysisBGL", entries: [ { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } }, { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } }, { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } } ]});
+            const renderBindGroupLayout = device.createBindGroupLayout({label: "RenderBGL", entries: [ { binding: 0, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } }, { binding: 1, visibility: GPUShaderStage.VERTEX, buffer: { type: 'uniform' } } ] });
+            
+            const particleUpdatePipeline = device.createComputePipeline({label:"UpdatePL", layout: device.createPipelineLayout({label: "UpdatePLL", bindGroupLayouts: [particleUpdateBindGroupLayout]}), compute: { module: particleUpdateShaderModule, entryPoint: 'main' } });
+            const particleAnalysisPipeline = device.createComputePipeline({label:"AnalysisPL", layout: device.createPipelineLayout({label: "AnalysisPLL", bindGroupLayouts: [particleAnalysisBindGroupLayout]}), compute: { module: particleAnalysisShaderModule, entryPoint: 'main' } });
+            const renderPipeline = device.createRenderPipeline({label:"RenderPL", layout: device.createPipelineLayout({label: "RenderPLL", bindGroupLayouts: [renderBindGroupLayout]}), vertex: { module: renderShaderModule, entryPoint: 'vs_main' }, fragment: { module: renderShaderModule, entryPoint: 'fs_main', targets: [{ format: presentationFormat, blend: { color: { srcFactor: 'src-alpha', dstFactor: 'one', operation: 'add' }, alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' }} }] }, primitive: { topology: 'point-list' } });
+            
+            const particleUpdateBindGroup = device.createBindGroup({label:"UpdateBG", layout: particleUpdatePipeline.getBindGroupLayout(0), entries: [ { binding: 0, resource: { buffer: particleBuffer } }, { binding: 1, resource: { buffer: uniformBuffer } } ]});
+            const particleAnalysisBindGroup = device.createBindGroup({label:"AnalysisBG", layout: particleAnalysisPipeline.getBindGroupLayout(0), entries: [ { binding: 0, resource: { buffer: particleBuffer } }, { binding: 1, resource: { buffer: uniformBuffer } }, { binding: 2, resource: { buffer: feedbackBuffer } } ]});
+            const renderBindGroup = device.createBindGroup({label:"RenderBG", layout: renderPipeline.getBindGroupLayout(0), entries: [ { binding: 0, resource: { buffer: particleBuffer } }, { binding: 1, resource: { buffer: uniformBuffer } } ] });
+            
+            let startTime = performance.now();
+            let frameCount = 0;
+
+            async function frame() { /* ... same as v7.1, with .slice(0) in readback for safety ... */
+                if (!canvas) return;
+                const currentTime = performance.now();
+                const time = (currentTime - startTime) / 1000.0;
+                currentAspectRatio = canvas.width / canvas.height;
+                if (isNaN(currentAspectRatio) || currentAspectRatio === 0) currentAspectRatio = 1;
+
+                if (audioContext.state === 'running') {
+                    analyserNode.getByteFrequencyData(frequencyData);
+                    let sum = 0; for (let i = 0; i < frequencyData.length; i++) sum += frequencyData[i];
+                    audioEnergy = Math.min(1.0, (sum / frequencyData.length) / 150);
+                    updateAudioDrone(time);
+                }
+
+                if (time * 1000 - lastGlitchTime > glitchInterval) { isGlitching = true; lastGlitchTime = time*1000; /* audio glitch... */ }
+                if (isGlitching && time*1000 - lastGlitchTime > (300 + fmDroneParams.soundComplexity * 300) ) isGlitching = false;
+                
+                const uniformData = new Float32Array([
+                    time, mousePos.active ? mousePos.x : 0.5, mousePos.active ? mousePos.y : 0.5,
+                    audioEnergy, isGlitching ? 1.0 : 0.0, currentAspectRatio,
+                    fmDroneParams.carrierFreq, fmDroneParams.modulatorRatio, fmDroneParams.modulatorIndex, fmDroneParams.soundComplexity,
+                    currentParticleBaseColor[0], currentParticleBaseColor[1], currentParticleBaseColor[2],
+                    particleMetrics.avgX, particleMetrics.avgY, particleMetrics.avgSpeed, particleMetrics.density
+                ]);
+                device.queue.writeBuffer(uniformBuffer, 0, uniformData);
+
+                const commandEncoder = device.createCommandEncoder();
+                const particlePass = commandEncoder.beginComputePass({label: "ParticleUpdatePass"});
+                particlePass.setPipeline(particleUpdatePipeline);
+                particlePass.setBindGroup(0, particleUpdateBindGroup);
+                particlePass.dispatchWorkgroups(Math.ceil(NUM_PARTICLES / 256));
+                particlePass.end();
+
+                const analysisPass = commandEncoder.beginComputePass({label: "ParticleAnalysisPass"});
+                analysisPass.setPipeline(particleAnalysisPipeline);
+                analysisPass.setBindGroup(0, particleAnalysisBindGroup);
+                analysisPass.dispatchWorkgroups(1); 
+                analysisPass.end();
+                commandEncoder.copyBufferToBuffer(feedbackBuffer, 0, feedbackReadBuffer, 0, feedbackBufferSize);
+
+                const textureView = context.getCurrentTexture().createView();
+                const renderPass = commandEncoder.beginRenderPass({ label: "RenderPass",
+                    colorAttachments: [{ view: textureView, clearValue: { r: 0.001, g: 0.001, b: 0.002, a: 1.0 }, loadOp: 'clear', storeOp: 'store' }],});
+                renderPass.setPipeline(renderPipeline);
+                renderPass.setBindGroup(0, renderBindGroup);
+                renderPass.draw(NUM_PARTICLES);
+                renderPass.end();
+                device.queue.submit([commandEncoder.finish()]);
+
+                await feedbackReadBuffer.mapAsync(GPUMapMode.READ);
+                const feedbackArray = new Float32Array(feedbackReadBuffer.getMappedRange().slice(0)); 
+                particleMetrics.avgX = feedbackArray[0] || 0;
+                particleMetrics.avgY = feedbackArray[1] || 0;
+                particleMetrics.avgSpeed = feedbackArray[2] || 0;
+                particleMetrics.density = Math.min(1.0, Math.max(0.0, (feedbackArray[3] || 0) * 0.00001)); // Further adjusted normalization
+                feedbackReadBuffer.unmap();
+                
+                frameCount++;
+                requestAnimationFrame(frame);
+            }
+            
+            function setCanvasSize() { /* ... same as v7.1 ... */ const dpr = window.devicePixelRatio || 1; const dW = Math.floor(canvas.clientWidth*dpr); const dH = Math.floor(canvas.clientHeight*dpr); if(canvas.width !== dW || canvas.height !== dH) { canvas.width = Math.max(1, Math.min(dW, device.limits.maxTextureDimension2D)); canvas.height = Math.max(1, Math.min(dH, device.limits.maxTextureDimension2D)); currentAspectRatio = canvas.width/canvas.height; if(isNaN(currentAspectRatio)||currentAspectRatio===0)currentAspectRatio=1;}}
+            const RO = new ResizeObserver(setCanvasSize); try {RO.observe(canvas);}catch(e){window.addEventListener('resize',setCanvasSize);} setCanvasSize();
+            const startAudio = () => { if (audioContext && audioContext.state === 'suspended') { audioContext.resume(); } document.removeEventListener('mousemove', startAudio); document.removeEventListener('touchstart', startAudio); };
+            document.addEventListener('mousemove', startAudio); document.addEventListener('touchstart', startAudio);
+
+            requestAnimationFrame(frame);
+            infoElement.textContent = "Generative audiovisual system initializing...";
+        }
+        main().catch(err => { console.error("Error in main:", err); if(document.getElementById('info')) document.getElementById('info').textContent = "Fatal Error. Check console."; });
+    </script>
+</body>
+</html>

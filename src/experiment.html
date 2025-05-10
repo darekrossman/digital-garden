@@ -1,0 +1,1461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Esoteric WebGPU & Audio Background</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #08080a; /* Dark, near-black background */
+            cursor: none; /* Hide system cursor, we'll draw our own if needed */
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        #info {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            color: rgba(200, 200, 200, 0.5);
+            font-family: monospace;
+            font-size: 12px;
+            pointer-events: none; /* Allow clicks through */
+        }
+    </style>
+</head>
+<body>
+    <canvas id="webgpuCanvas"></canvas>
+    <div id="info">Move mouse to interact. Sound will play.</div>
+
+    <script type="module">
+        async function main() {
+            const canvas = document.getElementById('webgpuCanvas');
+            const infoElement = document.getElementById('info');
+
+            if (!navigator.gpu) {
+                infoElement.textContent = "WebGPU not supported. Please use a browser like Chrome Canary or Edge Dev and enable WebGPU.";
+                console.error("WebGPU not supported.");
+                return;
+            }
+
+            const adapter = await navigator.gpu.requestAdapter();
+            if (!adapter) {
+                infoElement.textContent = "Failed to get GPU adapter. WebGPU might be disabled or not fully supported.";
+                console.error("Failed to get GPU adapter.");
+                return;
+            }
+            const device = await adapter.requestDevice();
+
+            const context = canvas.getContext('webgpu');
+            const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
+
+            context.configure({
+                device,
+                format: presentationFormat,
+                alphaMode: 'opaque', // or 'premultiplied' if you want transparency with background
+            });
+
+            // --- Parameters ---
+            const numParticles = 300000; // Larger field for more flowing visuals
+            const particleColorBase = [0.6, 0.6, 0.8]; // Softer Base color (lavender/blue bias)
+            const particleColorAudioInfluence = 0.2;
+            const glitchInterval = 7000; // ms - slightly longer
+            let lastGlitchTime = 0;
+            let isGlitching = false;
+
+            // --- Mouse State ---
+            const mousePos = { x: 0.5, y: 0.5, active: false };
+            // Add click state
+            const clickState = { x: 0.5, y: 0.5, time: -1000.0, active: false }; // time relative to performance.now()
+
+            window.addEventListener('mousemove', (e) => {
+                mousePos.x = e.clientX / window.innerWidth;
+                mousePos.y = e.clientY / window.innerHeight;
+                mousePos.active = true;
+                
+                // Initialize audio on first mouse move (actual sound is triggered on clicks)
+                if (!audioContext) {
+                    initAudio();
+                }
+            });
+            window.addEventListener('mouseleave', () => mousePos.active = false);
+
+
+            // --- Web Audio Setup ---
+            let audioContext = null;
+            let analyserNode;
+            let frequencyData;
+            let oscillator1, oscillator2, oscillator3;
+            let gainNode, filterNode, pannerNode;
+            let delayNode, reverbNode, compressorNode;
+            let audioEnergy = 0.0;
+            let audioFrequencyData = [];
+            let bassEnergy = 0.0;
+            let midEnergy = 0.0;
+            let highEnergy = 0.0;
+            
+            // Musical notes in a pleasing pentatonic scale
+            const pentatonicNotes = [
+                220.00, // A3
+                246.94, // B3
+                277.18, // C#4
+                329.63, // E4
+                369.99, // F#4
+                440.00, // A4
+                493.88, // B4
+                554.37, // C#5
+                659.25, // E5
+                739.99  // F#5
+            ];
+
+            // Define Melancholy Scales (notes as frequency multipliers relative to a root)
+            const MELANCHOLY_SCALES = {
+                NATURAL_MINOR: [1, 9/8, 6/5, 4/3, 3/2, 8/5, 9/5], // Root, M2, m3, P4, P5, m6, m7
+                HARMONIC_MINOR: [1, 9/8, 6/5, 4/3, 3/2, 8/5, 15/8], // Natural minor with a raised 7th
+                DORIAN: [1, 9/8, 6/5, 4/3, 3/2, 5/3, 9/5], // Minor with a raised 6th
+                PHRYGIAN: [1, 16/15, 6/5, 4/3, 3/2, 8/5, 9/5], // Minor with a lowered 2nd
+                AEOLIAN_PENTATONIC: [1, 6/5, 4/3, 3/2, 8/5] // m3, P4, P5, m6 - a common minor pentatonic
+            };
+            let currentScaleKey = 'NATURAL_MINOR';
+            let currentRootNote = 110.0; // A2 - Lower root for melancholy feel
+            let availableScaleKeys = Object.keys(MELANCHOLY_SCALES);
+            let lastParticleColorFeedback = { r: 0, g: 0, b: 0 }; // Store aggregated color feedback
+            let particleActivityLevel = 0; // Approximates particle system activity
+
+            function getNoteInCurrentScale(index, octaveOffset = 0) {
+                const scale = MELANCHOLY_SCALES[currentScaleKey];
+                const noteMultiplier = scale[index % scale.length];
+                const octaveMultiplier = Math.pow(2, Math.floor(index / scale.length) + octaveOffset);
+                return currentRootNote * noteMultiplier * octaveMultiplier;
+            }
+
+            function getRandomNote() {
+                // Old pentatonic random note - keep for reference or specific events
+                return pentatonicNotes[Math.floor(Math.random() * pentatonicNotes.length)];
+            }
+
+            function getRandomNoteFromCurrentScale(octave = 0) {
+                const scale = MELANCHOLY_SCALES[currentScaleKey];
+                const randomIndex = Math.floor(Math.random() * scale.length);
+                return getNoteInCurrentScale(randomIndex, octave);
+            }
+
+            let lastScaleNoteIndex = 0;
+            function triggerAudioClickEvent() {
+                if (!audioContext) {
+                    initAudio();
+                }
+                if (audioContext.state === 'suspended') {
+                    audioContext.resume();
+                }
+
+                const now = audioContext.currentTime;
+
+                // Pick a new root note and scale step different from previous
+                const scale = MELANCHOLY_SCALES[currentScaleKey];
+                let nextIndex = (lastScaleNoteIndex + 1 + Math.floor(Math.random()* (scale.length-1))) % scale.length;
+                lastScaleNoteIndex = nextIndex;
+
+                // Randomly change root every click for variety
+                currentRootNote = 80 + Math.random()*120;
+
+                const baseFreq = getNoteInCurrentScale(nextIndex, 0);
+
+                // Helper to create FM voice
+                function createFMVoice(freq, duration) {
+                    const carrier = audioContext.createOscillator();
+                    const mod     = audioContext.createOscillator();
+                    const modGain = audioContext.createGain();
+
+                    // Random ratios and index
+                    const modRatio = 0.5 + Math.random()*4.0; // 0.5 – 4.5x carrier
+                    const modIndex = Math.random()*freq*2.0;  // deviation
+
+                    carrier.type = 'sine';
+                    mod.type     = 'sine';
+                    carrier.frequency.setValueAtTime(freq, now);
+                    mod.frequency.setValueAtTime(freq * modRatio, now);
+                    modGain.gain.setValueAtTime(modIndex, now);
+
+                    mod.connect(modGain);
+                    modGain.connect(carrier.frequency);
+
+                    // Subtle low-pass filter for mellow tone
+                    const lp = audioContext.createBiquadFilter();
+                    lp.type = 'lowpass';
+                    lp.frequency.setValueAtTime(800 + Math.random()*1200, now);
+                    lp.Q.setValueAtTime(0.7 + Math.random()*1.5, now);
+
+                    // Amplitude envelope
+                    const amp = audioContext.createGain();
+                    const peak = 0.3;
+                    amp.gain.setValueAtTime(0.0, now);
+                    amp.gain.linearRampToValueAtTime(peak, now + 0.02);
+                    amp.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+                    // Connect nodes
+                    carrier.connect(lp);
+                    lp.connect(amp);
+
+                    // Choose a random effect for this voice
+                    const effects = ['delay','reverb','chorus','distortion'];
+                    const choice = effects[Math.floor(Math.random()*effects.length)];
+
+                    let wetOut;
+                    switch (choice) {
+                        case 'delay': {
+                            const d = audioContext.createDelay(2.0);
+                            d.delayTime.setValueAtTime(0.15 + Math.random()*0.25, now);
+                            const fb = audioContext.createGain();
+                            fb.gain.setValueAtTime(0.2 + Math.random()*0.3, now);
+                            d.connect(fb);
+                            fb.connect(d);
+                            amp.connect(d);
+                            wetOut = d;
+                            break;
+                        }
+                        case 'reverb': {
+                            // Reuse global reverb node but with per-voice wet gain
+                            const wet = audioContext.createGain();
+                            wet.gain.setValueAtTime(0.4, now);
+                            amp.connect(reverbNode);
+                            reverbNode.connect(wet);
+                            wetOut = wet;
+                            break;
+                        }
+                        case 'chorus': {
+                            const chorDelay = audioContext.createDelay();
+                            chorDelay.delayTime.setValueAtTime(0.015, now);
+                            const lfo = audioContext.createOscillator();
+                            lfo.frequency.setValueAtTime(0.5 + Math.random(), now);
+                            const lfoGain = audioContext.createGain();
+                            lfoGain.gain.setValueAtTime(0.008 + Math.random()*0.005, now); // 8-13ms sweep
+                            lfo.connect(lfoGain);
+                            lfoGain.connect(chorDelay.delayTime);
+                            lfo.start(now);
+                            amp.connect(chorDelay);
+                            wetOut = chorDelay;
+                            break;
+                        }
+                        case 'distortion': {
+                            const distort = audioContext.createWaveShaper();
+                            const curveLen = 44100;
+                            const curve = new Float32Array(curveLen);
+                            const amt = 200 + Math.random()*800;
+                            for (let i=0;i<curveLen;i++) {
+                                const x = i*2/curveLen - 1;
+                                curve[i] = (2/Math.PI)*Math.atan(x*amt);
+                            }
+                            distort.curve = curve;
+                            distort.oversample = '4x';
+                            amp.connect(distort);
+                            wetOut = distort;
+                            break;
+                        }
+                    }
+
+                    // Dry path directly to compressor
+                    amp.connect(compressorNode);
+                    // Wet path
+                    if (wetOut) wetOut.connect(compressorNode);
+
+                    // Start/stop
+                    carrier.start(now);
+                    mod.start(now);
+                    carrier.stop(now + duration + 0.2);
+                    mod.stop(now + duration + 0.2);
+                }
+
+                // Create 1–2 FM voices per click
+                const voiceCount = 1 + Math.floor(Math.random()*2);
+                for (let v=0; v<voiceCount; v++) {
+                    const freq = baseFreq * (v===0 ? 1 : (Math.random()*0.5 + 0.75));
+                    createFMVoice(freq, 1.2 + Math.random()*0.6);
+                }
+
+                // Randomly switch scale family occasionally
+                if (Math.random() < 0.3) {
+                    currentScaleKey = availableScaleKeys[Math.floor(Math.random()*availableScaleKeys.length)];
+                }
+
+                // Auto-suspend the AudioContext after the tail ends (~3s)
+                setTimeout(()=>{ if (audioContext && audioContext.state === 'running') audioContext.suspend(); }, 3000);
+            }
+
+            function initAudio() {
+                // Only create the AudioContext if it doesn't exist yet
+                if (!audioContext) {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    
+                    // Analyzer with more detailed frequency data
+                    analyserNode = audioContext.createAnalyser();
+                    analyserNode.fftSize = 1024; // More detailed FFT
+                    frequencyData = new Uint8Array(analyserNode.frequencyBinCount);
+                    audioFrequencyData = new Array(3).fill(0); // Bass, mid, high
+                    
+                    // Create oscillators with more pleasing timbres
+                    oscillator1 = audioContext.createOscillator();
+                    oscillator2 = audioContext.createOscillator();
+                    oscillator3 = audioContext.createOscillator();
+                    
+                    // Additional audio processing for more interesting sound
+                    gainNode = audioContext.createGain();
+                    filterNode = audioContext.createBiquadFilter();
+                    pannerNode = audioContext.createStereoPanner();
+                    delayNode = audioContext.createDelay(1.0);
+                    compressorNode = audioContext.createDynamicsCompressor();
+                    
+                    // Create a simple reverb effect
+                    const convolver = audioContext.createConvolver();
+                    reverbNode = convolver;
+                    
+                    // Generate impulse response for reverb
+                    const reverbSeconds = 1.0;
+                    const sampleRate = audioContext.sampleRate;
+                    const impulseLength = sampleRate * reverbSeconds;
+                    const impulseResponse = audioContext.createBuffer(2, impulseLength, sampleRate);
+                    
+                    for (let channel = 0; channel < 2; channel++) {
+                        const impulseData = impulseResponse.getChannelData(channel);
+                        for (let i = 0; i < impulseLength; i++) {
+                            // Exponential decay for natural reverb sound
+                            impulseData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / impulseLength, 2);
+                        }
+                    }
+                    
+                    convolver.buffer = impulseResponse;
+
+                    // Setup oscillators with more musical tones
+                    oscillator1.type = 'sine';
+                    oscillator1.frequency.setValueAtTime(getRandomNoteFromCurrentScale(0), audioContext.currentTime);
+                    
+                    oscillator2.type = 'triangle';
+                    oscillator2.frequency.setValueAtTime(getRandomNoteFromCurrentScale(-1), audioContext.currentTime); // Lower octave
+                    
+                    oscillator3.type = 'sine';
+                    oscillator3.frequency.setValueAtTime(getRandomNoteFromCurrentScale(-2), audioContext.currentTime); // Even lower
+                    
+                    // Filter setup
+                    filterNode.type = 'lowpass';
+                    filterNode.frequency.setValueAtTime(800, audioContext.currentTime);
+                    filterNode.Q.setValueAtTime(2, audioContext.currentTime);
+                    
+                    // Delay setup
+                    delayNode.delayTime.setValueAtTime(0.25, audioContext.currentTime);
+                    
+                    // Compressor to control dynamics
+                    compressorNode.threshold.setValueAtTime(-24, audioContext.currentTime);
+                    compressorNode.knee.setValueAtTime(30, audioContext.currentTime);
+                    compressorNode.ratio.setValueAtTime(12, audioContext.currentTime);
+                    compressorNode.attack.setValueAtTime(0.003, audioContext.currentTime);
+                    compressorNode.release.setValueAtTime(0.25, audioContext.currentTime);
+                    
+                    // Set a gentle global gain for the drone layer (very quiet)
+                    gainNode.gain.setValueAtTime(0.02, audioContext.currentTime);
+
+                    // Connect audio nodes in more complex routing
+                    oscillator1.connect(pannerNode);
+                    oscillator2.connect(pannerNode);
+                    oscillator3.connect(pannerNode);
+                    
+                    pannerNode.connect(filterNode);
+                    filterNode.connect(gainNode);
+                    
+                    // Split the signal for dry/wet mixing
+                    const dryGain = audioContext.createGain();
+                    const wetGain = audioContext.createGain();
+                    
+                    gainNode.connect(dryGain);
+                    gainNode.connect(delayNode);
+                    delayNode.connect(wetGain);
+                    
+                    dryGain.gain.setValueAtTime(0.7, audioContext.currentTime);
+                    wetGain.gain.setValueAtTime(0.3, audioContext.currentTime);
+                    
+                    dryGain.connect(compressorNode);
+                    wetGain.connect(compressorNode);
+                    
+                    compressorNode.connect(analyserNode);
+                    analyserNode.connect(audioContext.destination);
+                    
+                    // Start oscillators
+                    oscillator1.start();
+                    oscillator2.start();
+                    oscillator3.start();
+                    
+                    // Schedule occasional note changes for base oscillators
+                    scheduleNoteChanges();
+                    // Start generative drone voices
+                    scheduleDroneVoice();
+                    
+                    infoElement.textContent = "WebGPU & Audio Initialized. Move mouse.";
+                }
+            }
+            
+            // Schedule subtle musical changes for interest
+            function scheduleNoteChanges() {
+                if (!audioContext) return;
+                
+                // Interval influenced by particle activity - more activity = faster changes
+                const baseInterval = 4000;
+                const activityFactor = 1.0 - particleActivityLevel * 0.7; // Max 70% reduction
+                const changeInterval = (baseInterval * activityFactor) + Math.random() * 2000;
+                
+                setTimeout(() => {
+                    if (audioContext && audioContext.state === 'running') {
+                        const now = audioContext.currentTime;
+                        const whichOsc = Math.floor(Math.random() * 3);
+                        
+                        // Note selection influenced by color feedback & activity
+                        const scale = MELANCHOLY_SCALES[currentScaleKey];
+                        let noteIndex = Math.floor((lastParticleColorFeedback.g + lastParticleColorFeedback.b) * 0.5 * scale.length);
+                        noteIndex = (noteIndex + Math.floor(Math.random() * 3) - 1 + scale.length) % scale.length; // Add some randomness
+                        
+                        let octave = Math.floor(lastParticleColorFeedback.r * 3) - 1; // Red influences octave (-1 to 1)
+                        octave = Math.min(1, Math.max(-2, octave)); // Clamp octave for main oscillators
+
+                        const newNote = getNoteInCurrentScale(noteIndex, octave);
+                        const transitionTime = (changeInterval / 2000) * (1.0 - particleActivityLevel * 0.5);
+                        
+                        if (whichOsc === 0) {
+                            oscillator1.frequency.linearRampToValueAtTime(newNote, now + transitionTime);
+                        } else if (whichOsc === 1) {
+                            let intervalFactor = scale[(noteIndex + 2 + Math.floor(Math.random()*2)) % scale.length] / scale[noteIndex % scale.length]; // Consonant interval
+                            oscillator2.frequency.linearRampToValueAtTime(newNote * intervalFactor * 0.5, now + transitionTime * 1.2);
+                        } else {
+                            let intervalFactor = scale[(noteIndex + 4 + Math.floor(Math.random()*2)) % scale.length] / scale[noteIndex % scale.length]; // Another consonant interval
+                            oscillator3.frequency.linearRampToValueAtTime(newNote * intervalFactor * 0.25, now + transitionTime * 1.4);
+                        }
+                    }
+                    scheduleNoteChanges();
+                }, changeInterval);
+            }
+            
+            // === Generative Drone ===
+            function createFMDroneVoice(baseFreq) {
+                if (!audioContext) return;
+                const now = audioContext.currentTime;
+
+                const carrier = audioContext.createOscillator();
+                const mod = audioContext.createOscillator();
+                const modGain = audioContext.createGain();
+                const amp = audioContext.createGain();
+
+                // FM params influenced by particle feedback
+                const colorInfluence = lastParticleColorFeedback;
+                const modRatio = 0.1 + colorInfluence.r*2.0 + Math.random()*2.0; // red raises ratio
+                const modIndex = baseFreq * (0.1 + colorInfluence.b*2.0 + Math.random()*2.0); // blue raises index
+
+                carrier.type = 'sine';
+                mod.type = 'sine';
+                carrier.frequency.setValueAtTime(baseFreq, now);
+                mod.frequency.setValueAtTime(baseFreq * modRatio, now);
+                modGain.gain.setValueAtTime(modIndex, now);
+
+                mod.connect(modGain);
+                modGain.connect(carrier.frequency);
+
+                // Subtle low-pass character
+                const lp = audioContext.createBiquadFilter();
+                lp.type = 'lowpass';
+                lp.frequency.setValueAtTime(300 + Math.random()*600, now);
+                lp.Q.setValueAtTime(0.5 + Math.random()*1.5, now);
+
+                // Amplitude Envelope (varying)
+                const activity = particleActivityLevel;
+                const attack = 0.2 + activity*3.0 + Math.random()*2.0; // busier visuals = slower attack
+                const sustainTime = 3 + activity*4.0 + Math.random()*4.0;
+                const release = 4 + activity*6.0 + Math.random()*5.0;
+                const peak = 0.02 + 0.08*activity + Math.random()*0.05;
+
+                amp.gain.setValueAtTime(0.0, now);
+                amp.gain.linearRampToValueAtTime(peak, now + attack);
+                amp.gain.setValueAtTime(peak, now + attack + sustainTime);
+                amp.gain.exponentialRampToValueAtTime(0.0001, now + attack + sustainTime + release);
+
+                // Effect selection influenced by frequency bands
+                const effects = ['delay','reverb','chorus','distortion'];
+                let choice;
+                if (highEnergy > 0.4 && Math.random()<0.5) { choice='distortion'; }
+                else if (midEnergy > 0.5) { choice='chorus'; }
+                else if (bassEnergy > 0.5) { choice='delay'; }
+                else { choice = effects[Math.floor(Math.random()*effects.length)]; }
+
+                let wetOut = null;
+
+                switch(choice) {
+                    case 'delay': {
+                        const d = audioContext.createDelay(2.0);
+                        d.delayTime.setValueAtTime(0.2 + Math.random()*0.4, now);
+                        const fb = audioContext.createGain();
+                        fb.gain.setValueAtTime(0.1 + Math.random()*0.25, now);
+                        d.connect(fb); fb.connect(d);
+                        amp.connect(d);
+                        wetOut = d;
+                        break;
+                    }
+                    case 'reverb': {
+                        const wet = audioContext.createGain();
+                        wet.gain.setValueAtTime(0.5, now);
+                        amp.connect(reverbNode);
+                        reverbNode.connect(wet);
+                        wetOut = wet;
+                        break;
+                    }
+                    case 'chorus': {
+                        const chorDelay = audioContext.createDelay();
+                        chorDelay.delayTime.setValueAtTime(0.015, now);
+                        const lfo = audioContext.createOscillator();
+                        lfo.frequency.setValueAtTime(0.2 + Math.random()*0.6, now);
+                        const lfoGain = audioContext.createGain();
+                        lfoGain.gain.setValueAtTime(0.006 + Math.random()*0.006, now); // 6-12 ms
+                        lfo.connect(lfoGain);
+                        lfoGain.connect(chorDelay.delayTime);
+                        lfo.start(now);
+                        amp.connect(chorDelay);
+                        wetOut = chorDelay;
+                        break;
+                    }
+                    case 'distortion': {
+                        const shaper = audioContext.createWaveShaper();
+                        const len = 44100;
+                        const curve = new Float32Array(len);
+                        const k = 100 + Math.random()*500;
+                        for (let i=0;i<len;i++) {
+                            const x = i*2/len - 1;
+                            curve[i] = (2/Math.PI) * Math.atan(x*k);
+                        }
+                        shaper.curve = curve;
+                        shaper.oversample = '4x';
+                        amp.connect(shaper);
+                        wetOut = shaper;
+                        break;
+                    }
+                }
+
+                // Routing
+                carrier.connect(lp);
+                lp.connect(amp);
+                amp.connect(compressorNode);
+                if (wetOut) wetOut.connect(compressorNode);
+
+                // Start/stop scheduling
+                carrier.start(now);
+                mod.start(now);
+                const totalDur = attack + sustainTime + release + 2;
+                carrier.stop(now + totalDur);
+                mod.stop(now + totalDur);
+            }
+
+            function scheduleDroneVoice() {
+                if (!audioContext) return;
+                // Random low note from current scale, lower octaves
+                const scale = MELANCHOLY_SCALES[currentScaleKey];
+                const idx = Math.floor(Math.random()*scale.length);
+                const octave = -2 + Math.floor(Math.random()*2); // -2 or -1
+                const freq = getNoteInCurrentScale(idx, octave);
+
+                // Occasionally drift root and/or scale
+                if (Math.random() < 0.1) {
+                    currentRootNote = 40 + Math.random()*80;
+                }
+                if (Math.random() < 0.05) {
+                    currentScaleKey = availableScaleKeys[Math.floor(Math.random()*availableScaleKeys.length)];
+                }
+
+                createFMDroneVoice(freq);
+
+                // Schedule next voice in 1-5 seconds
+                const next = 1000 + Math.random()*4000;
+                setTimeout(scheduleDroneVoice, next);
+            }
+
+            // --- Particle Data ---
+            // Each particle: x, y, vx, vy (vec4f)
+            const particleData = new Float32Array(numParticles * 4);
+            for (let i = 0; i < numParticles; ++i) {
+                particleData[i * 4 + 0] = Math.random() * 2 - 1; // x: -1 to 1
+                particleData[i * 4 + 1] = Math.random() * 2 - 1; // y: -1 to 1
+                particleData[i * 4 + 2] = (Math.random() * 2 - 1) * 0.002; // vx
+                particleData[i * 4 + 3] = (Math.random() * 2 - 1) * 0.002; // vy
+            }
+
+            const particleBuffer = device.createBuffer({
+                size: particleData.byteLength,
+                usage: GPUBufferUsage.VERTEX | GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+                mappedAtCreation: true,
+            });
+            new Float32Array(particleBuffer.getMappedRange()).set(particleData);
+            particleBuffer.unmap();
+
+            // --- Uniforms ---
+            // time, mouseX, mouseY, audioEnergy, isGlitching, aspectRatio,
+            // bassEnergy, midEnergy, highEnergy, clickX, clickY, clickActive,
+            // camYaw, camPitch, dynAttrX, dynAttrY, dynAttrStrength
+            const uniformBufferSize = 17 * 4; // 17 floats
+            const uniformBuffer = device.createBuffer({
+                size: uniformBufferSize,
+                usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+            });
+
+            // --- Shaders ---
+            const computeShaderModule = device.createShaderModule({
+                code: `
+                    struct Particle {
+                        pos: vec2<f32>,
+                        vel: vec2<f32>,
+                    };
+
+                    @group(0) @binding(0) var<storage, read_write> particles: array<Particle>;
+                    @group(0) @binding(1) var<uniform> u: externals;
+
+                    struct externals {
+                        time: f32,
+                        mouseX: f32,
+                        mouseY: f32,
+                        audioEnergy: f32,
+                        isGlitching: f32,
+                        aspectRatio: f32,
+                        bassEnergy: f32,
+                        midEnergy: f32,
+                        highEnergy: f32,
+                        clickX: f32,
+                        clickY: f32,
+                        clickActive: f32,
+                        camYaw: f32,
+                        camPitch: f32,
+                        dynAttrX: f32,
+                        dynAttrY: f32,
+                        dynAttrStrength: f32,
+                    };
+                    
+                    // Simple pseudo-random generator
+                    var<private> rand_seed: u32 = 0u;
+                    fn random_float() -> f32 {
+                        rand_seed = rand_seed * 1664525u + 1013904223u;
+                        return f32(rand_seed & 0x00FFFFFFu) / 16777216.0;
+                    }
+
+                    // ---------------- Letter SDF Helpers -----------------
+                    fn sdBox(p: vec2<f32>, b: vec2<f32>) -> f32 {
+                        let q = abs(p) - b;
+                        return length(max(q, vec2<f32>(0.0))) + min(max(q.x, q.y), 0.0);
+                    }
+
+                    fn sdCircle(p: vec2<f32>, r: f32) -> f32 {
+                        return length(p) - r;
+                    }
+
+                    // Signed distance for block-style letter D centred at (-0.3,0)
+                    fn sdLetterD(p: vec2<f32>) -> f32 {
+                        let off = p - vec2<f32>(-0.3, 0.0);
+                        // vertical stem
+                        let stem = sdBox(off + vec2<f32>(0.15, 0.0), vec2<f32>(0.05, 0.4));
+                        // ring part
+                        let outer = sdCircle(vec2<f32>(off.x + 0.05, off.y), 0.25);
+                        let inner = sdCircle(vec2<f32>(off.x + 0.05, off.y), 0.18);
+                        let ring = max(outer, -inner);
+                        return min(stem, ring);
+                    }
+
+                    // Signed distance for block-style letter R centred at (0.3,0)
+                    fn sdLetterR(p: vec2<f32>) -> f32 {
+                        let off = p - vec2<f32>(0.3, 0.0);
+                        let stem = sdBox(off, vec2<f32>(0.05, 0.4));
+                        let outer = sdCircle(vec2<f32>(off.x - 0.05, off.y + 0.15), 0.22);
+                        let inner = sdCircle(vec2<f32>(off.x - 0.05, off.y + 0.15), 0.15);
+                        let bowl = max(outer, -inner);
+                        // diagonal leg approximation
+                        let k = vec2<f32>(0.3, -0.4);
+                        let proj = clamp(dot(off - vec2<f32>(0.05, -0.1), k) / dot(k, k), 0.0, 1.0);
+                        let leg = length((off - vec2<f32>(0.05, -0.1)) - k * proj) - 0.05;
+                        return min(min(stem, bowl), leg);
+                    }
+
+                    fn letterSDF(p: vec2<f32>) -> f32 {
+                        return min(abs(sdLetterD(p)), abs(sdLetterR(p))); // distance to edges of either letter
+                    }
+
+                    @compute @workgroup_size(64)
+                    fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
+                        let idx = global_id.x;
+                        if (idx >= arrayLength(&particles)) { return; }
+                        
+                        rand_seed = idx + u32(u.time * 1000.0); // Seed per particle and time
+
+                        var p = particles[idx];
+
+                        // --- Attractor Logic --- 
+                        // Original blended point attractor (now less dominant)
+                        let pointAttractorStrength = 0.3 + u.bassEnergy * 0.2;
+                        let bassAttractorPoint = vec2<f32>(sin(u.time * 0.05) * 0.4, cos(u.time * 0.035) * 0.4);
+                        let midAttractorPoint = vec2<f32>(sin(u.time * 0.1 + 1.5) * 0.25, cos(u.time * 0.075 + 2.1) * 0.25);
+                        let highAttractorPoint = vec2<f32>(sin(u.time * 0.15 + 3.0) * 0.15, cos(u.time * 0.125 + 4.2) * 0.15);
+                        let blendedPointAttractor = (bassAttractorPoint*u.bassEnergy + midAttractorPoint*u.midEnergy + highAttractorPoint*u.highEnergy) * (0.5 + u.audioEnergy);
+                        var dirToPointAttractor = normalize(blendedPointAttractor - p.pos) * pointAttractorStrength;
+
+                        // New: Line Segment Attractor
+                        let lineAttractorStrength = 0.7 + u.midEnergy * 0.3; // Mids make line more influential
+                        var lineAngle = u.time * 0.05 + u.bassEnergy * 1.5; // Bass rotates the line
+                        var lineLength = 0.3 + u.highEnergy * 0.4; // Highs change line length
+                        var lineCenter = vec2<f32>(sin(u.time * 0.02) * 0.2, cos(u.time * 0.025) * 0.2); // Slowly drifting center
+
+                        // Click can temporarily override line attractor parameters
+                        if (u.clickActive > 0.5) {
+                            let clickWorldPos = vec2<f32>((u.clickX * 2.0 - 1.0) * u.aspectRatio, -(u.clickY * 2.0 - 1.0));
+                            // Make line center move towards click, angle point towards click particle was on
+                            lineCenter = mix(lineCenter, clickWorldPos, 0.3 * u.midEnergy); // Mid energy influences how much click pulls center
+                            let dirFromClickToCenter = normalize(lineCenter - clickWorldPos);
+                            if (length(dirFromClickToCenter) > 0.01) {
+                                lineAngle = atan2(dirFromClickToCenter.y, dirFromClickToCenter.x) + u.bassEnergy * 1.0; // Bass adds swing
+                            }
+                            lineLength = mix(lineLength, 0.1 + u.highEnergy * 0.5, 0.5); // Click also alters length
+                        }
+
+                        let lineDir = vec2<f32>(cos(lineAngle), sin(lineAngle));
+                        let p1 = lineCenter - lineDir * lineLength * 0.5;
+                        let p2 = lineCenter + lineDir * lineLength * 0.5;
+
+                        // Calculate closest point on line segment to particle p
+                        let lineVec = p2 - p1;
+                        let t = clamp(dot(p.pos - p1, lineVec) / dot(lineVec, lineVec), 0.0, 1.0);
+                        let closestPointOnLine = p1 + t * lineVec;
+                        var dirToLineAttractor = normalize(closestPointOnLine - p.pos) * lineAttractorStrength;
+                        // If very close to the line, reduce attraction to prevent sticking, or add perpendicular force
+                        if (distance(closestPointOnLine, p.pos) < 0.01) {
+                            dirToLineAttractor = dirToLineAttractor * 0.1; // Weaken if too close
+                             // Add a gentle nudge along the line based on mids
+                            dirToLineAttractor += normalize(lineVec) * (0.0001 * u.midEnergy) * sign(dot(p.pos - lineCenter, lineVec));
+                        }
+
+                        // Combine attractor forces (weighted)
+                        let totalAttractionForce = dirToPointAttractor * 0.2 + dirToLineAttractor * 0.8;
+
+                        // --------- Letter edge attraction ---------
+                        var letterEdgeForce = vec2<f32>(0.0, 0.0);
+                        let letterDist = letterSDF(p.pos);
+                        let edgeThreshold = 0.3; // region of influence
+                        if (letterDist < edgeThreshold) {
+                            let eps = 0.003;
+                            // Numerical gradient of sdf
+                            let grad = vec2<f32>(
+                                letterSDF(p.pos + vec2<f32>(eps, 0.0)) - letterSDF(p.pos - vec2<f32>(eps, 0.0)),
+                                letterSDF(p.pos + vec2<f32>(0.0, eps)) - letterSDF(p.pos - vec2<f32>(0.0, eps))
+                            );
+                            let g = normalize(grad);
+                            let strength = (edgeThreshold - letterDist) / edgeThreshold; // stronger nearer edge
+                            // Increase letter edge pull with overall audio energy to boost density responsively
+                            let dynamicStrength = (0.00015 + u.audioEnergy * 0.0006);
+                            letterEdgeForce = -g * strength * dynamicStrength; // subtle pull to edge
+                        }
+
+                        // New: Procedural Flow Field
+                        let flowFieldStrength = 0.00015 + u.audioEnergy * 0.0003;  // Stronger flow for more motion
+                        var flowScale = 2.0 + u.midEnergy * 3.0; // Mids change the scale/complexity of the flow
+                        var flowSpeed = u.time * 0.02 + u.bassEnergy * 0.1; // Bass influences flow speed
+                        var flowDirectionality = 1.0; // General direction, click can flip it locally
+
+                        if (u.clickActive > 0.5) {
+                            let clickWorldPos = vec2<f32>((u.clickX * 2.0 - 1.0) * u.aspectRatio, -(u.clickY * 2.0 - 1.0));
+                            let distToClick = distance(p.pos, clickWorldPos);
+                            if (distToClick < 0.2 + u.bassEnergy * 0.2) { // Radius of click influence on flow
+                                flowScale *= (1.0 + u.highEnergy * 2.0); // Click makes flow locally more chaotic/detailed
+                                flowSpeed *= (1.0 + u.midEnergy * 1.5);   // Click speeds up local flow based on mids
+                                flowDirectionality = -1.0; // Locally reverse flow direction
+                            }
+                        }
+
+                        let flowX = sin(p.pos.y * flowScale + flowSpeed) * cos(p.pos.x * flowScale * 0.7 + flowSpeed * 0.5) * flowDirectionality;
+                        let flowY = cos(p.pos.x * flowScale + flowSpeed * 1.2) * sin(p.pos.y * flowScale * 0.8 + flowSpeed * 0.7) * flowDirectionality;
+                        var flowForce = vec2<f32>(flowX, flowY) * flowFieldStrength;
+
+                        // Modulate flow force by particle's y-position and highEnergy for variation
+                        flowForce *= (0.5 + abs(p.pos.y) * 0.5) * (1.0 + u.highEnergy * 2.0);
+
+                        // Mouse influence - further reduced and more of a gentle nudge
+                        let mouseInfluenceFactor = 0.25; // Reduced from 1.0 or direct use
+                        let mouseWorldPos = vec2<f32>(
+                            (u.mouseX * 2.0 - 1.0) * u.aspectRatio * mouseInfluenceFactor + (0.5 - mouseInfluenceFactor) * u.aspectRatio, 
+                            (-(u.mouseY * 2.0 - 1.0) * mouseInfluenceFactor + (0.5 - mouseInfluenceFactor)) * -1.0
+                        );
+
+                        let distToMouse = distance(p.pos, mouseWorldPos);
+                        var repulsionForce = vec2<f32>(0.0, 0.0);
+                        
+                        // More nuanced mouse repulsion based on frequency bands
+                        if (u.mouseY > 0.01 && distToMouse < 0.25 * mouseInfluenceFactor) { // Further reduced radius
+                            let repulsionStrength = (0.005 + u.midEnergy * 0.01) * mouseInfluenceFactor; // Reduced strength
+                            let repulsionRadius = (0.2 + u.bassEnergy * 0.15) * mouseInfluenceFactor;
+                            
+                            if (distToMouse < repulsionRadius) {
+                                repulsionForce = normalize(p.pos - mouseWorldPos) * 
+                                                (repulsionRadius - distToMouse) * 
+                                                repulsionStrength * 
+                                                (1.0 + u.highEnergy * 2.0);
+                            }
+                        }
+
+                        // Click interaction - temporary attractor/repulsor
+                        // Pathway: create a stronger, decaying force that pulls particles along a line from click
+                        // This is now more of a direct pulse, as line/flow are also affected by click.
+                        var clickPulseForce = vec2<f32>(0.0, 0.0);
+                        if (u.clickActive > 0.5) {
+                            let clickWorldPos = vec2<f32>((u.clickX * 2.0 - 1.0) * u.aspectRatio, -(u.clickY * 2.0 - 1.0));
+                            let dirToParticle = p.pos - clickWorldPos;
+                            let distToClick = length(dirToParticle);
+                            
+                            let clickPulseRadius = 0.25 + u.bassEnergy * 0.2;
+                            let clickPulseStrength = 0.0005 + u.midEnergy * 0.001; 
+
+                            if (distToClick < clickPulseRadius && distToClick > 0.001) {
+                                var forceDir = normalize(dirToParticle);
+                                // Bass pushes, highs pull
+                                if (u.bassEnergy > u.highEnergy) { forceDir *= 1.0; } else { forceDir *= -1.0; }
+                                
+                                let strengthFalloff = (clickPulseRadius - distToClick) / clickPulseRadius;
+                                clickPulseForce = forceDir * clickPulseStrength * strengthFalloff * (1.0 + u.audioEnergy * 2.0);
+                            }
+                        }
+                        
+                        // -------- Dynamic attractor from CPU-side control --------
+                        var dynAttrForce = vec2<f32>(0.0, 0.0);
+                        if (u.dynAttrStrength > 0.01) {
+                            let dynPos = vec2<f32>(u.dynAttrX, u.dynAttrY);
+                            let dirToDyn = dynPos - p.pos;
+                            let distDyn = length(dirToDyn) + 0.0001;
+                            dynAttrForce = normalize(dirToDyn) * u.dynAttrStrength * 0.0005 / distDyn; // scale with inverse distance
+                        }
+
+                        // Create subtle vortex effect based on high frequencies
+                        let vortexStrength = u.highEnergy * 0.005;
+                        let vortexForce = vec2<f32>(
+                            -p.pos.y * vortexStrength,
+                            p.pos.x * vortexStrength
+                        );
+
+                        // Audio influenced physics calculations
+                        let audioFactor = 0.05 + u.bassEnergy * 0.3 + u.midEnergy * 0.2 + u.highEnergy * 0.1; // Overall impact reduced
+                        
+                        // Glitch effect enhanced with frequency data
+                        if (u.isGlitching > 0.5) {
+                            let glitchChance = 0.002 + u.highEnergy * 0.01; // further reduced chance
+                            if (random_float() < glitchChance) {
+                                // Only slight jitter without large bursts
+                                let jitter = vec2<f32>(
+                                   (random_float()-0.5)*0.05,
+                                   (random_float()-0.5)*0.05
+                                );
+                                p.vel += jitter * 0.0008;
+                            }
+                        } else {
+                            // Anti-particle behaviour
+                            var antiFactor: f32 = 1.0;
+                            if ((idx & 15u) == 0u) { // ~6% of particles behave inversely
+                                antiFactor = -1.0;
+                            }
+
+                            p.vel += (totalAttractionForce * 0.0003 * audioFactor) * antiFactor;
+                            p.vel += repulsionForce * antiFactor;
+                            p.vel += vortexForce * antiFactor;
+                            p.vel += clickPulseForce * antiFactor; // Renamed from clickForce
+                            p.vel += flowForce * antiFactor; 
+                            p.vel += letterEdgeForce * antiFactor;
+                            p.vel += dynAttrForce * antiFactor;
+                            
+                            // Add small stochastic flutter influenced by high frequencies
+                            let flutter = vec2<f32>(random_float()-0.5, random_float()-0.5) * (0.00005 + u.highEnergy*0.0004);
+                            p.vel += flutter;
+                            
+                            // Audio-responsive damping - reduced mouse Y influence
+                            let dampingFactor = 0.94 - u.mouseY * 0.01 - u.bassEnergy * 0.02; // Less damping for more flow
+                            p.vel *= dampingFactor;
+                        }
+
+                        // Velocity limit based on audio energy
+                        let maxSpeed = 0.01 + u.bassEnergy * 0.03 + u.midEnergy * 0.02 + u.highEnergy * 0.01;
+                        if (length(p.vel) > maxSpeed) {
+                            p.vel = normalize(p.vel) * maxSpeed;
+                        }
+
+                        p.pos += p.vel;
+
+                        // Subtle respawn: particles that drift out are re-seeded near the main attractor
+                        if (abs(p.pos.x) > u.aspectRatio || abs(p.pos.y) > 1.0) {
+                            let offset = vec2<f32>((random_float()-0.5)*0.02, (random_float()-0.5)*0.02);
+                            p.pos = blendedPointAttractor + offset;
+                            p.vel = vec2<f32>(0.0,0.0);
+                        }
+
+                        particles[idx] = p;
+                    }
+                `,
+            });
+
+            const renderShaderModule = device.createShaderModule({
+                code: `
+                    struct Particle {
+                        pos: vec2<f32>,
+                        vel: vec2<f32>, // Keep vel for coloring
+                    };
+                    
+                    @group(0) @binding(0) var<storage, read> particles: array<Particle>;
+                    @group(0) @binding(1) var<uniform> u: externals;
+
+                     struct externals { // Must match compute shader's externals struct
+                        time: f32,
+                        mouseX: f32,
+                        mouseY: f32,
+                        audioEnergy: f32,
+                        isGlitching: f32,
+                        aspectRatio: f32,
+                        bassEnergy: f32,
+                        midEnergy: f32,
+                        highEnergy: f32,
+                        clickX: f32,
+                        clickY: f32,
+                        clickActive: f32,
+                        camYaw: f32,
+                        camPitch: f32,
+                        dynAttrX: f32,
+                        dynAttrY: f32,
+                        dynAttrStrength: f32,
+                    };
+
+                    struct VertexOutput {
+                        @builtin(position) position: vec4<f32>,
+                        @location(0) color: vec4<f32>,
+                        @location(1) texCoord: vec2<f32>,
+                        @location(2) size: f32,
+                        @location(3) clickEffect: f32, 
+                    };
+
+                    // Vertex positions for a quad centered at 0,0
+                    const VERTICES: array<vec2<f32>, 6> = array<vec2<f32>, 6>(
+                        vec2<f32>(-1.0, -1.0),
+                        vec2<f32>( 1.0, -1.0),
+                        vec2<f32>( 1.0,  1.0),
+                        vec2<f32>( 1.0,  1.0),
+                        vec2<f32>(-1.0,  1.0),
+                        vec2<f32>(-1.0, -1.0)
+                    );
+                    
+                    // Texture coordinates for the quad
+                    const TEX_COORDS: array<vec2<f32>, 6> = array<vec2<f32>, 6>(
+                        vec2<f32>(0.0, 0.0),
+                        vec2<f32>(1.0, 0.0),
+                        vec2<f32>(1.0, 1.0),
+                        vec2<f32>(1.0, 1.0),
+                        vec2<f32>(0.0, 1.0),
+                        vec2<f32>(0.0, 0.0)
+                    );
+
+                    @vertex
+                    fn vs_main(
+                        @builtin(vertex_index) vertex_idx: u32,
+                        @builtin(instance_index) instance_idx: u32
+                    ) -> VertexOutput {
+                        var out: VertexOutput;
+                        let p = particles[instance_idx];
+                        
+                        // Calculate particle speed
+                        let speed = length(p.vel);
+                        
+                        // Dynamic color palette based on frequency bands and position
+                        // Softer color mapping
+                        var baseColor = vec3<f32>(
+                            (${particleColorBase[0]} + u.bassEnergy * 0.15 - u.highEnergy * 0.1) * 0.8, // Desaturate slightly
+                            (${particleColorBase[1]} - u.bassEnergy * 0.1 + u.midEnergy * 0.2) * 0.8,
+                            (${particleColorBase[2]} - u.midEnergy * 0.05 + u.highEnergy * 0.25) * 0.8
+                        );
+                        
+                        let posInfluence = sin(p.pos.x * 1.5 + u.time * 0.3) * 0.05 + 
+                                          cos(p.pos.y * 1.5 + u.time * 0.2) * 0.05;
+                                           
+                        baseColor += vec3<f32>(posInfluence, posInfluence * 0.6, posInfluence * 1.1);
+                        
+                        let speedFactor = speed * 30.0; // Reduced impact of speed on color intensity
+                        
+                        var R = baseColor.r + speedFactor * (0.5 + u.bassEnergy * 0.4) - u.highEnergy * 0.05;
+                        var G = baseColor.g - speedFactor * (0.1 - u.midEnergy * 0.3) + u.midEnergy * 0.15;
+                        var B = baseColor.b + speedFactor * (0.2 + u.highEnergy * 0.5) + (1.0 - u.bassEnergy) * 0.2;
+
+                        // More sophisticated glitch effect
+                        if (u.isGlitching > 0.5) {
+                            // Probability of color glitch based on high frequency content
+                            let glitchThreshold = 0.1 + u.highEnergy * 0.2;
+                            if (fract(f32(instance_idx) * 0.137 + u.time * 2.0) < glitchThreshold) {
+                                // More sophisticated color transformation
+                                let t = u.time + f32(instance_idx) * 0.01;
+                                R = mix(R, 1.0 - G, sin(t) * 0.5 + 0.5);
+                                G = mix(G, B, cos(t * 1.3) * 0.5 + 0.5);
+                                B = mix(B, 1.0 - R, sin(t * 0.7) * 0.5 + 0.5);
+                            }
+                        }
+                        
+                        // Brightness pulse based on bass
+                        let brightness = 1.0 + u.bassEnergy * 0.5 * sin(u.time * 4.0);
+                        
+                        // Color normalization and adjustment
+                        R = clamp(R * brightness, 0.0, 1.0);
+                        G = clamp(G * brightness, 0.0, 1.0);
+                        B = clamp(B * brightness, 0.0, 1.0);
+                        
+                        // Alpha based on multiple factors for more subtle appearance
+                        let baseAlpha = 0.1 + u.audioEnergy * 0.2; // Even more transparent base
+                        let speedAlpha = min(speed * 15.0, 0.3); 
+                        let positionAlpha = (1.0 - length(p.pos) * 0.15); 
+                        let alpha = clamp(baseAlpha + speedAlpha, 0.02, 0.6) * positionAlpha; // Max alpha reduced
+                        
+                        out.color = vec4<f32>(R, G, B, alpha);
+                        
+                        // Particle size based on audio and speed - much smaller & more varied
+                        // Introduce a base random size variation per particle, if we had a way to store it.
+                        // For now, rely on audio and speed for dynamic variation on a smaller base.
+                        let baseSizeMultiplier = 0.001 + u.bassEnergy * 0.002 + u.midEnergy * 0.001; // Drastically smaller
+                        let speedSizeModifier = 0.5 + clamp(speed * 10.0, 0.0, 0.5); // Speed makes them slightly larger, not smaller
+                        let randomFlicker = 1.0; // No flicker for now, could add based on instance_idx if desired: (0.7 + fract(sin(f32(instance_idx) * 12.9898) * 43758.5453) * 0.6);
+                        let particleSize = (baseSizeMultiplier * speedSizeModifier * randomFlicker) * (0.5 + u.highEnergy * 1.5) ; // High energy can briefly make some larger
+                        out.size = max(0.0005, particleSize); // Ensure minimum size (effectively 1 pixel for small screens)
+                        
+                        // Set texture coordinates for the fragment shader
+                        out.texCoord = TEX_COORDS[vertex_idx];
+                        
+                        // Calculate click effect for visual feedback in render shader
+                        var clickVisEffect = 0.0;
+                        if (u.clickActive > 0.5) {
+                            let clickWorldPos = vec2<f32>((u.clickX * 2.0 - 1.0) * u.aspectRatio, -(u.clickY * 2.0 - 1.0));
+                            let distToClick = distance(p.pos, clickWorldPos);
+                            let clickVisRadius = 0.3 + u.bassEnergy * 0.2;
+                            if (distToClick < clickVisRadius) {
+                                clickVisEffect = (clickVisRadius - distToClick) / clickVisRadius;
+                            }
+                        }
+                        out.clickEffect = clickVisEffect;
+                        
+                        // --- Generative perspective mapping ---
+                        // Compute depth using hash noise evolving over time and audioEnergy
+                        let hash = fract(sin(f32(instance_idx)*91.345 + u.time*3.13)*43758.5453);
+                        let depthBase = hash; // 0-1
+                        // Modulate depth gently with audio bands
+                        let depthAudio = depthBase + u.bassEnergy*0.4 - u.highEnergy*0.2;
+                        let depth = clamp(depthAudio, 0.0, 1.0);
+
+                        // Camera yaw & pitch vary unpredictably via nested sines
+                        let yaw = u.camYaw;
+                        let pitch = u.camPitch;
+
+                        // Rotation matrices
+                        let cy = cos(yaw);
+                        let sy = sin(yaw);
+                        let cp = cos(pitch);
+                        let sp = sin(pitch);
+
+                        // Original 3D position
+                        let px = p.pos.x;
+                        let py = p.pos.y;
+                        let pz = depth; // forward depth 0-1
+
+                        // Apply yaw then pitch
+                        var xz = vec2<f32>(px*cy - pz*sy, px*sy + pz*cy);
+                        var y = py*cp - xz.y*sp;
+                        var z = py*sp + xz.y*cp;
+                        var x = xz.x;
+
+                        // Simple perspective
+                        let persp = 1.0 / (1.3 + z);
+                        let screenX = x * persp;
+                        let screenY = y * persp;
+
+                        // Size/alpha adjust
+                        out.size *= clamp(persp*1.2, 0.3, 1.6);
+                        out.color.a *= clamp(persp*1.1, 0.3, 1.3);
+
+                        // Position quad in screen space
+                        let quadPos = vec2<f32>(screenX, screenY) + VERTICES[vertex_idx] * particleSize * persp;
+                        out.position = vec4<f32>(quadPos.x / u.aspectRatio, quadPos.y, 0.0, 1.0);
+                        
+                        return out;
+                    }
+
+                    @fragment
+                    fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+                        // Calculate distance from center of quad
+                        let center = vec2<f32>(0.5, 0.5);
+                        let dist = distance(in.texCoord, center) * 2.0; // Scale to 0-1 range
+                        
+                        // Soft circular shape with smooth falloff
+                        let circle = 1.0 - smoothstep(0.8, 1.0, dist);
+                        
+                        var finalColor = in.color.rgb;
+                        // Apply visual effect for click
+                        if (in.clickEffect > 0.0) {
+                            finalColor = mix(finalColor, vec3<f32>(1.0, 1.0, 0.8), in.clickEffect * 0.7); // Bright yellow flash
+                        }
+                        
+                        // Modify alpha for a soft glow effect
+                        let alpha = in.color.a * circle;
+                        
+                        // Return final color with modified alpha
+                        return vec4<f32>(finalColor, alpha);
+                    }
+                `,
+            });
+
+            // --- Pipelines ---
+            // Create separate bind group layouts for compute and render
+            const computeBindGroupLayout = device.createBindGroupLayout({
+                entries: [
+                    { 
+                        binding: 0, 
+                        visibility: GPUShaderStage.COMPUTE, 
+                        buffer: { type: 'storage' } 
+                    },
+                    { 
+                        binding: 1, 
+                        visibility: GPUShaderStage.COMPUTE, 
+                        buffer: { type: 'uniform' } 
+                    },
+                ],
+            });
+
+            const renderBindGroupLayout = device.createBindGroupLayout({
+                entries: [
+                    { 
+                        binding: 0, 
+                        visibility: GPUShaderStage.VERTEX, 
+                        buffer: { type: 'read-only-storage' } 
+                    },
+                    { 
+                        binding: 1, 
+                        visibility: GPUShaderStage.VERTEX, 
+                        buffer: { type: 'uniform' } 
+                    },
+                ],
+            });
+
+            const computePipelineLayout = device.createPipelineLayout({
+                bindGroupLayouts: [computeBindGroupLayout],
+            });
+
+            const renderPipelineLayout = device.createPipelineLayout({
+                bindGroupLayouts: [renderBindGroupLayout],
+            });
+
+            const computePipeline = device.createComputePipeline({
+                layout: computePipelineLayout,
+                compute: {
+                    module: computeShaderModule,
+                    entryPoint: 'main',
+                },
+            });
+
+            const renderPipeline = device.createRenderPipeline({
+                layout: renderPipelineLayout,
+                vertex: {
+                    module: renderShaderModule,
+                    entryPoint: 'vs_main',
+                },
+                fragment: {
+                    module: renderShaderModule,
+                    entryPoint: 'fs_main',
+                    targets: [{
+                        format: presentationFormat,
+                        blend: { 
+                            color: {
+                                srcFactor: 'src-alpha', // Standard alpha blending for softer look
+                                dstFactor: 'one-minus-src-alpha',
+                                operation: 'add',
+                            },
+                            alpha: { 
+                                srcFactor: 'one',
+                                dstFactor: 'one-minus-src-alpha',
+                                operation: 'add',
+                            }
+                        }
+                    }],
+                },
+                primitive: {
+                    topology: 'triangle-list', 
+                },
+            });
+
+            // --- Bind Groups ---
+            const computeBindGroup = device.createBindGroup({
+                layout: computeBindGroupLayout,
+                entries: [
+                    { binding: 0, resource: { buffer: particleBuffer } },
+                    { binding: 1, resource: { buffer: uniformBuffer } },
+                ],
+            });
+
+            const renderBindGroup = device.createBindGroup({
+                layout: renderBindGroupLayout,
+                entries: [
+                    { binding: 0, resource: { buffer: particleBuffer } },
+                    { binding: 1, resource: { buffer: uniformBuffer } },
+                ],
+            });
+            
+            let startTime = performance.now();
+
+            function frame() {
+                if (!canvas) return; // Canvas might have been removed
+
+                const currentTime = performance.now();
+                const deltaTime = (currentTime - startTime) / 1000.0; // time in seconds
+                
+                // Precompute aspect ratio for this frame (used in multiple places below)
+                const aspectRatio = canvas.width / canvas.height;
+
+                // ---- Camera smooth random shifts ----
+                if (currentTime - lastCamShiftTime > 4000 && camLerp >= 1.0) {
+                    targetCamYaw = (Math.random() - 0.5) * 1.2;  // wider horizontal sweep
+                    targetCamPitch = (Math.random() - 0.5) * 0.6; // subtle vertical tilt
+                    camLerp = 0.0;
+                    lastCamShiftTime = currentTime;
+                }
+                if (camLerp < 1.0) {
+                    camLerp += 0.01;
+                    camYaw += (targetCamYaw - camYaw) * 0.02;
+                    camPitch += (targetCamPitch - camPitch) * 0.02;
+                }
+
+                // ---- Dynamic attractor (strange attractor) ----
+                if (currentTime - dynAttr.lastChange > 3000) {
+                    dynAttr.x = (Math.random() * 2 - 1) * aspectRatio * 0.6;
+                    dynAttr.y = (Math.random() * 2 - 1) * 0.6;
+                    dynAttr.strength = 0.3 + Math.random() * 0.7;
+                    dynAttr.lastChange = currentTime;
+                } else {
+                    dynAttr.strength *= 0.995; // Decay over time for smoothness
+                }
+
+                // Estimate particle activity and color for audio feedback
+                // This is a simplification; true GPU readback is complex for real-time.
+                // We use audio energy components as a proxy for particle visual characteristics.
+                lastParticleColorFeedback.r = bassEnergy;    // Bass often maps to reds/purples
+                lastParticleColorFeedback.g = midEnergy;     // Mids to greens/yellows
+                lastParticleColorFeedback.b = highEnergy;  // Highs to blues/cyans
+                particleActivityLevel = audioEnergy; // Overall audio energy as proxy for activity
+
+                // Update audio if context exists and is running
+                if (audioContext && audioContext.state === 'running') {
+                    analyserNode.getByteFrequencyData(frequencyData);
+                    
+                    // Calculate energy in different frequency bands
+                    let bassBand = 0, midBand = 0, highBand = 0;
+                    let bassSum = 0, midSum = 0, highSum = 0;
+                    
+                    // Assumes 1024 FFT size resulting in 512 frequency bins
+                    // Approximate frequency bands:
+                    // Bass: 0-200Hz (≈0-23 bin)
+                    // Mid: 200-2000Hz (≈24-229 bin)
+                    // High: 2000-20000Hz (≈230+ bin)
+                    
+                    for (let i = 0; i < 24; i++) {
+                        bassSum += frequencyData[i];
+                    }
+                    
+                    for (let i = 24; i < 230; i++) {
+                        midSum += frequencyData[i];
+                    }
+                    
+                    for (let i = 230; i < frequencyData.length; i++) {
+                        highSum += frequencyData[i];
+                    }
+                    
+                    // Normalize energy values
+                    bassEnergy = Math.min(1.0, (bassSum / 24) / 128);
+                    midEnergy = Math.min(1.0, (midSum / 206) / 128);
+                    highEnergy = Math.min(1.0, (highSum / (frequencyData.length - 230)) / 128);
+                    
+                    // Overall energy (weighted towards bass and mid for visualization)
+                    audioEnergy = (bassEnergy * 0.5) + (midEnergy * 0.3) + (highEnergy * 0.2);
+                    
+                    // Store for visual effects
+                    audioFrequencyData = [bassEnergy, midEnergy, highEnergy];
+
+                    // Modulate audio params with mouse and energy - smoother changes
+                    // Reduced mouse influence on filter and pan
+                    const targetFilterFreq = 200 + (mousePos.y * 500) + (bassEnergy * 800); // Reduced from 2000
+                    filterNode.frequency.linearRampToValueAtTime(targetFilterFreq, audioContext.currentTime + 0.2);
+                    
+                    const targetGain = 0.0; // remain silent between clicks
+                    gainNode.gain.linearRampToValueAtTime(targetGain, audioContext.currentTime + 0.1);
+
+                    const targetPan = (mousePos.x - 0.5) * 0.1; // Reduced from 0.4
+                    pannerNode.pan.linearRampToValueAtTime(targetPan, audioContext.currentTime + 0.2);
+                    
+                    // Delay time affected by high frequencies
+                    delayNode.delayTime.linearRampToValueAtTime(0.1 + highEnergy * 0.4, audioContext.currentTime + 0.5);
+                    
+                    // Allow graphics to feed back into audio
+                    // By detecting the density of particles in different screen regions
+                    // and using that to influence the tone
+                    // Reduced direct mouse control over notes
+                    if (mousePos.active) { 
+                        // Mouse can still have a *subtle* influence on the *rate* or *intensity* of changes if desired
+                        // For example, mouse activity could slightly increase the chance of a note change or scale change.
+                        // Or influence a global parameter like reverb wetness.
+                        const wetness = 0.3 + mousePos.y * 0.2;
+                        if(reverbNode && reverbNode.context) { // Check if reverbNode is properly setup (ConvolverNode)
+                             // This part needs wet/dry gain nodes for reverb specifically to be effective
+                             // For now, let's slightly affect the main gainNode's input to filter as a proxy
+                            filterNode.Q.linearRampToValueAtTime(2 + mousePos.y * 3, audioContext.currentTime + 0.5);
+                        }
+                    }
+                } else {
+                    // If audio is not available, use default values
+                    audioEnergy = 0.05;
+                    bassEnergy = 0.05;
+                    midEnergy = 0.05;
+                    highEnergy = 0.05;
+                    audioFrequencyData = [bassEnergy, midEnergy, highEnergy];
+                }
+
+                // Handle Glitch
+                if (currentTime - lastGlitchTime > glitchInterval) {
+                    isGlitching = true;
+                    lastGlitchTime = currentTime;
+                    // Audio glitch: more musical and subtle transformation
+                    if (audioContext && audioContext.state === 'running') {
+                        const now = audioContext.currentTime;
+                        
+                        // Create a more musical glitch by selecting harmonically related notes
+                        const rootNote = getRandomNote();
+                        const harmonics = [1, 1.5, 2, 0.5, 0.75];
+                        const harmonic = harmonics[Math.floor(Math.random() * harmonics.length)];
+                        
+                        // Apply smoother transitions
+                        oscillator1.frequency.linearRampToValueAtTime(rootNote * harmonic, now + 0.1);
+                        oscillator1.frequency.linearRampToValueAtTime(rootNote, now + 2.0);
+                        
+                        oscillator2.frequency.linearRampToValueAtTime(rootNote * 0.5 * harmonic, now + 0.2);
+                        oscillator2.frequency.linearRampToValueAtTime(rootNote * 0.5, now + 1.8);
+                        
+                        // Create a filter sweep
+                        const originalFilterCutoff = filterNode.frequency.value;
+                        filterNode.frequency.setValueAtTime(originalFilterCutoff * 0.2, now);
+                        filterNode.frequency.exponentialRampToValueAtTime(originalFilterCutoff * 4, now + 0.3);
+                        filterNode.frequency.exponentialRampToValueAtTime(originalFilterCutoff, now + 1.0);
+                        
+                        // Brief delay time change
+                        delayNode.delayTime.linearRampToValueAtTime(0.5, now + 0.1);
+                        delayNode.delayTime.linearRampToValueAtTime(0.2, now + 1.5);
+                    }
+                }
+                if (isGlitching && currentTime - lastGlitchTime > 200) { // Glitch duration
+                    isGlitching = false;
+                }
+
+                // Update uniforms with expanded audio data
+                const uniformData = new Float32Array([
+                    deltaTime,
+                    mousePos.active ? mousePos.x : 0.5, 
+                    mousePos.active ? mousePos.y : 0.5,
+                    audioEnergy,
+                    isGlitching ? 1.0 : 0.0,
+                    aspectRatio,
+                    bassEnergy,
+                    midEnergy,
+                    highEnergy,
+                    clickState.x,
+                    clickState.y,
+                    clickState.active ? 1.0 : 0.0,
+                    camYaw,
+                    camPitch,
+                    dynAttr.x,
+                    dynAttr.y,
+                    dynAttr.strength
+                ]);
+                device.queue.writeBuffer(uniformBuffer, 0, uniformData);
+                
+                // Reset click active state after sending to GPU for one frame
+                if (clickState.active) {
+                    clickState.active = false;
+                }
+
+                const commandEncoder = device.createCommandEncoder();
+
+                // Compute pass
+                const computePass = commandEncoder.beginComputePass();
+                computePass.setPipeline(computePipeline);
+                computePass.setBindGroup(0, computeBindGroup);
+                computePass.dispatchWorkgroups(Math.ceil(numParticles / 64));
+                computePass.end();
+
+                // Render pass
+                const textureView = context.getCurrentTexture().createView();
+                const renderPassDescriptor = {
+                    colorAttachments: [{
+                        view: textureView,
+                        clearValue: { r: 0.01, g: 0.01, b: 0.015, a: 1.0 }, // Slightly darker, less saturated blue clear
+                        loadOp: 'clear',
+                        storeOp: 'store',
+                    }],
+                };
+                const renderPass = commandEncoder.beginRenderPass(renderPassDescriptor);
+                renderPass.setPipeline(renderPipeline);
+                renderPass.setBindGroup(0, renderBindGroup); 
+                // Draw 6 vertices per particle (a quad made of 2 triangles)
+                renderPass.draw(6, numParticles, 0, 0);
+                renderPass.end();
+
+                device.queue.submit([commandEncoder.finish()]);
+
+                requestAnimationFrame(frame);
+            }
+            
+            // Handle resize
+            const resizeObserver = new ResizeObserver(entries => {
+                for (const entry of entries) {
+                    const { width, height } = entry.contentRect;
+                    if (width === 0 || height === 0) continue; // Skip if canvas is not visible
+                    canvas.width = Math.max(1, Math.min(width, device.limits.maxTextureDimension2D));
+                    canvas.height = Math.max(1, Math.min(height, device.limits.maxTextureDimension2D));
+                    // Aspect ratio uniform is updated in frame()
+                }
+            });
+            try {
+                resizeObserver.observe(canvas);
+            } catch (e) { // Fallback for older browsers or specific environments
+                console.warn("ResizeObserver not supported, falling back to window resize.");
+                window.addEventListener('resize', () => {
+                    canvas.width = Math.max(1, Math.min(window.innerWidth, device.limits.maxTextureDimension2D));
+                    canvas.height = Math.max(1, Math.min(window.innerHeight, device.limits.maxTextureDimension2D));
+                });
+                // Trigger initial size
+                 canvas.width = Math.max(1, Math.min(window.innerWidth, device.limits.maxTextureDimension2D));
+                 canvas.height = Math.max(1, Math.min(window.innerHeight, device.limits.maxTextureDimension2D));
+            }
+             // Set initial size correctly
+            canvas.width = Math.max(1, Math.min(canvas.clientWidth, device.limits.maxTextureDimension2D));
+            canvas.height = Math.max(1, Math.min(canvas.clientHeight, device.limits.maxTextureDimension2D));
+
+            // Declare camera variables near top of main()
+            let camYaw = 0.0, camPitch = 0.0;
+            let targetCamYaw = 0.0, targetCamPitch = 0.0;
+            let camLerp = 1.0; // 1 = reached target
+            let lastCamShiftTime = 0;
+
+            // Dynamic attractor
+            let dynAttr = {x:0.0, y:0.0, strength:0.0, lastChange:0};
+
+            requestAnimationFrame(frame);
+        }
+
+        main().catch(err => {
+            console.error("Error in main:", err);
+            const infoElement = document.getElementById('info');
+            if(infoElement) infoElement.textContent = "An error occurred. Check console.";
+        });
+    </script>
+</body>
+</html>
