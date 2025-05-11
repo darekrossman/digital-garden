@@ -10,9 +10,14 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@types/three": "^0.176.0",
+    "leva": "^0.10.0",
+    "motion": "^12.10.5",
     "next": "15.3.2",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "three": "^0.176.0",
+    "three-webgpu": "^0.0.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",

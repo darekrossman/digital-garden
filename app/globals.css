@@ -8,4 +8,5 @@ html {
   font-size: var(--font-sizes-xs);
   -webkit-font-smoothing: auto;
   -moz-osx-font-smoothing: grayscale;
+  scroll-snap-type: y mandatory;
 }
