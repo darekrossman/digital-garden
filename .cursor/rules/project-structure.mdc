@@ -1,0 +1,30 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Project Structure
+
+This is a Next.js project. Here's a brief overview of the important directories and files:
+
+*   **`app/`**: Contains the core application code, including pages, layouts, and components. This is where most of the development happens in a Next.js project using the App Router.
+    *   `layout.tsx`: The main layout for the application.
+    *   `page.tsx`: The main page of the application.
+*   **`public/`**: Stores static assets like images, fonts, etc., that are served directly by the web server.
+*   **`components/`**: (If it exists or will be created) This directory typically holds reusable React components.
+*   **`lib/`**: (If it exists or will be created) This directory can be used for utility functions, helper scripts, or other shared code.
+*   **`styles/`**: (If it exists or will be created) This directory often contains global stylesheets or CSS modules.
+*   **`pages/`**: (If using the Pages Router) In older Next.js versions or projects that haven't migrated to the App Router, this directory contains the application's pages.
+*   **`node_modules/`**: Contains all the project dependencies installed via npm or yarn.
+*   **`package.json`**: Defines project metadata, dependencies, and scripts. See [package.json](mdc:package.json).
+*   **`tsconfig.json`**: Configuration file for TypeScript. See [tsconfig.json](mdc:tsconfig.json).
+*   **`next.config.ts`**: Configuration file for Next.js. See [next.config.ts](mdc:next.config.ts).
+*   **`.gitignore`**: Specifies intentionally untracked files that Git should ignore. See [.gitignore](mdc:.gitignore).
+*   **`README.md`**: Provides information about the project. See [README.md](mdc:README.md).
+
+## Key Files
+
+*   **[app/layout.tsx](mdc:app/layout.tsx)**: The root layout of the application.
+*   **[app/page.tsx](mdc:app/page.tsx)**: The main entry point page for the application.
+*   **[next.config.ts](mdc:next.config.ts)**: Next.js specific configurations.
+*   **[package.json](mdc:package.json)**: Project dependencies and scripts.

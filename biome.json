@@ -1,0 +1,58 @@
+{
+  "$schema": "https://biomejs.dev/schemas/1.5.3/schema.json",
+  "organizeImports": {
+    "enabled": true
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": false,
+      "complexity": {
+        "noExcessiveCognitiveComplexity": "off",
+        "noForEach": "off"
+      },
+      "correctness": {
+        "noUnusedVariables": "warn",
+        "useExhaustiveDependencies": "warn"
+      },
+      "style": {
+        "noNonNullAssertion": "off",
+        "useShorthandArrayType": "warn",
+        "useDefaultParameterLast": "warn"
+      },
+      "suspicious": {
+        "noExplicitAny": "warn",
+        "noArrayIndexKey": "warn"
+      }
+    }
+  },
+  "formatter": {
+    "enabled": true,
+    "indentWidth": 2,
+    "indentStyle": "space",
+    "lineWidth": 100
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "semicolons": "asNeeded"
+    }
+  },
+  "files": {
+    "ignore": [
+      "node_modules/**",
+      ".pwakit/node_modules/**",
+      ".pwakit/build/**",
+      ".pwakit/app/next/**",
+      ".next/**",
+      "**/dist/**",
+      "**/.turbo/**",
+      "coverage/**",
+      "public/**",
+      "*.svg",
+      "*.woff2",
+      "*.pack"
+    ],
+    "ignoreUnknown": true
+  }
+}
