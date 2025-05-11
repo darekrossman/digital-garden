@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Visual Experiment - Swirling Microcosm</title>
+    <style>
+        body { margin: 0; background-color: #08080A; color: #eee; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
+        canvas { display: block; }
+        #controls { position: absolute; top: 20px; left: 20px; z-index: 10; background: rgba(10,10,20,0.8); padding: 10px; border-radius: 5px;}
+        #transcript { margin-top: 10px; font-style: italic; color: #bbb; max-width: 80vw; text-align: center; min-height: 1.2em;}
+        button { padding: 10px 15px; font-size: 16px; cursor: pointer; background-color: #2a2a3a; color: #eee; border: 1px solid #444455;}
+        button:hover { background-color: #3a3a4a;}
+        button:disabled { background-color: #1a1a2a; color: #777; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+    <div id="controls">
+        <button id="startButton">Start Listening</button>
+        <div id="transcript">Transcript will appear here...</div>
+    </div>
+    <canvas id="webgpuCanvas"></canvas>
+    <canvas id="textCanvas" style="display:none;"></canvas>
+
+    <script type="module">
+        // --- Configuration ---
+        const PARTICLE_COUNT = 70000;
+        const TEXT_CANVAS_WIDTH = 512;
+        const TEXT_CANVAS_HEIGHT = 128;
+        const MAX_ATTRACTORS = 1024;
+        const NEW_TEXT_KICK_BASE_STRENGTH = 0.12;
+
+        // --- Global State ---
+        let device, context, canvasFormat, pipeline, computePipeline;
+        let particleBuffer, particleVelocityBuffer, attractorBuffer, computeUniformBuffer;
+        let computeBindGroup;
+        let currentTranscript = "";
+        let attractorsData = new Float32Array(MAX_ATTRACTORS * 4);
+        let speechRecognition;
+        let isListening = false;
+        let animationFrameId;
+        let newTextKickIntensity = 0.0;
+        let stopCalledByUser = false;
+
+        const canvas = document.getElementById('webgpuCanvas');
+        const textCanvas = document.getElementById('textCanvas');
+        const textCtx = textCanvas.getContext('2d', { willReadFrequently: true });
+        textCanvas.width = TEXT_CANVAS_WIDTH;
+        textCanvas.height = TEXT_CANVAS_HEIGHT;
+
+        const startButton = document.getElementById('startButton');
+        const transcriptDiv = document.getElementById('transcript');
+
+        // --- Speech Recognition Setup ---
+        function setupSpeechRecognition() {
+            console.log("setupSpeechRecognition called");
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) {
+                const msg = "Speech Recognition API not supported in this browser.";
+                alert(msg); console.error(msg); startButton.disabled = true; transcriptDiv.textContent = msg; return;
+            }
+            speechRecognition = new SpeechRecognition();
+            speechRecognition.continuous = true; speechRecognition.interimResults = true; speechRecognition.lang = 'en-US';
+            speechRecognition.onstart = () => {
+                console.log("SpeechRecognition.onstart: recognition has started.");
+                isListening = true; startButton.textContent = 'Stop Listening'; startButton.disabled = false; transcriptDiv.textContent = 'Listening...';
+            };
+            speechRecognition.onaudiostart = () => { console.log("SpeechRecognition.onaudiostart: audio capture started."); };
+            speechRecognition.onresult = (event) => {
+                let interimTranscript = ''; let finalTranscript = '';
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    if (event.results[i].isFinal) { finalTranscript += event.results[i][0].transcript; }
+                    else { interimTranscript += event.results[i][0].transcript; }
+                }
+                const newText = (finalTranscript || interimTranscript).trim();
+                if (newText && newText !== currentTranscript) {
+                    currentTranscript = newText; transcriptDiv.textContent = `"${currentTranscript}"`;
+                    updateAttractorsFromText(currentTranscript); newTextKickIntensity = 1.0;
+                } else if (!newText && currentTranscript !== "" && finalTranscript !== undefined) {
+                    currentTranscript = ""; transcriptDiv.textContent = 'Transcript cleared...';
+                    updateAttractorsFromText(""); newTextKickIntensity = 0.5;
+                }
+            };
+            speechRecognition.onerror = (event) => {
+                console.error('Speech recognition error:', event.error, event.message);
+                let errorMsg = `Mic Error: ${event.error}`; if (event.message) errorMsg += ` (${event.message})`;
+                if (event.error === 'not-allowed' || event.error === 'service-not-allowed') { errorMsg += ". Ensure mic permissions granted & page on HTTPS/localhost."; }
+                else if (event.error === 'no-speech') { errorMsg = "No speech detected."; }
+                transcriptDiv.textContent = errorMsg; isListening = false; startButton.textContent = 'Start Listening'; startButton.disabled = false; stopCalledByUser = false;
+            };
+            speechRecognition.onend = () => {
+                console.log("SpeechRecognition.onend. stopCalledByUser:", stopCalledByUser, "isListening(before reset):", isListening);
+                const wasListening = isListening; isListening = false;
+                if (wasListening && !stopCalledByUser) { console.log("Speech recognition ended unexpectedly."); transcriptDiv.textContent = 'Mic stopped. Click Start.'; }
+                else { if (transcriptDiv.textContent.startsWith("Listening")) { transcriptDiv.textContent = 'Mic off. Click Start.'; } }
+                startButton.textContent = 'Start Listening'; startButton.disabled = false; stopCalledByUser = false;
+            };
+            console.log("SpeechRecognition object created and event handlers set up.");
+        }
+        function startListening() {
+            if (!navigator.onLine) { transcriptDiv.textContent = "Network connection needed for speech recognition."; }
+            if (!speechRecognition) { setupSpeechRecognition(); } if (!speechRecognition) { return; }
+            if (isListening || startButton.textContent === 'Stop Listening') { return; }
+            try {
+                stopCalledByUser = false; speechRecognition.start();
+                startButton.disabled = true; transcriptDiv.textContent = 'Mic starting...';
+            } catch (e) {
+                console.error("Error calling speechRecognition.start():", e.name, e.message, e);
+                transcriptDiv.textContent = `Error starting mic: ${e.name}. Check console.`;
+                isListening = false; startButton.textContent = 'Start Listening'; startButton.disabled = false;
+            }
+        }
+        function stopListening() {
+            if (speechRecognition) {
+                if (isListening) { stopCalledByUser = true; speechRecognition.stop(); }
+                else { stopCalledByUser = true; try { speechRecognition.abort(); } catch (e) { console.warn("Error aborting:", e); } }
+            }
+            isListening = false; startButton.textContent = 'Start Listening'; startButton.disabled = false;
+        }
+        startButton.onclick = () => { if (isListening) { stopListening(); } else { startListening(); }};
+
+        // --- Text to Attractor Points (Unchanged) ---
+        function updateAttractorsFromText(text) {
+            textCtx.fillStyle = 'black'; textCtx.fillRect(0, 0, TEXT_CANVAS_WIDTH, TEXT_CANVAS_HEIGHT);
+            textCtx.fillStyle = 'white'; textCtx.font = 'bold 90px monospace';
+            textCtx.textAlign = 'center'; textCtx.textBaseline = 'middle';
+            let fontSize = 90;
+            if (text.trim() !== "") {
+                textCtx.font = `bold ${fontSize}px monospace`;
+                while(textCtx.measureText(text).width > TEXT_CANVAS_WIDTH * 0.95 && fontSize > 10) {
+                    fontSize -= 2; textCtx.font = `bold ${fontSize}px monospace`;
+                }
+                textCtx.fillText(text, TEXT_CANVAS_WIDTH / 2, TEXT_CANVAS_HEIGHT / 2);
+            }
+            const imageData = textCtx.getImageData(0, 0, TEXT_CANVAS_WIDTH, TEXT_CANVAS_HEIGHT);
+            const newAttractorsList = []; const step = 2; const jitterStrength = 0.06;
+            if (text.trim() !== "") {
+                for (let y = 0; y < TEXT_CANVAS_HEIGHT; y += step) {
+                    for (let x = 0; x < TEXT_CANVAS_WIDTH; x += step) {
+                        const index = (y * TEXT_CANVAS_WIDTH + x) * 4;
+                        if (imageData.data[index] > 100) {
+                            if (newAttractorsList.length / 4 < MAX_ATTRACTORS) {
+                                let normX = (x / TEXT_CANVAS_WIDTH) * 2 - 1 + (Math.random() - 0.5) * jitterStrength * 2;
+                                let normY = -((y / TEXT_CANVAS_HEIGHT) * 2 - 1) + (Math.random() - 0.5) * jitterStrength * 2;
+                                newAttractorsList.push(normX, normY, 0.0, 0.0);
+                            } else { break; }
+                        }
+                    }
+                    if (newAttractorsList.length / 4 >= MAX_ATTRACTORS) break;
+                }
+            }
+            attractorsData.fill(0); if (newAttractorsList.length > 0) { attractorsData.set(newAttractorsList); }
+            if (device && attractorBuffer) { device.queue.writeBuffer(attractorBuffer, 0, attractorsData); }
+        }
+
+        // --- WebGPU Initialization & Rendering Loop ---
+        async function initWebGPU() {
+            console.log("initWebGPU called");
+            if (!navigator.gpu) { alert("WebGPU not supported."); console.error("WebGPU not supported."); throw new Error("WebGPU not supported."); }
+            const adapter = await navigator.gpu.requestAdapter();
+            if (!adapter) { alert("No GPUAdapter."); console.error("No GPUAdapter."); throw new Error("No GPUAdapter."); }
+            device = await adapter.requestDevice();
+            canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+            context = canvas.getContext('webgpu'); canvasFormat = navigator.gpu.getPreferredCanvasFormat();
+            context.configure({ device, format: canvasFormat, alphaMode: 'premultiplied' });
+            const initialParticleData = new Float32Array(PARTICLE_COUNT * 2);
+            const initialVelocityData = new Float32Array(PARTICLE_COUNT * 2);
+            for (let i = 0; i < PARTICLE_COUNT; i++) {
+                initialParticleData[i * 2] = (Math.random() - 0.5) * 2.0; initialParticleData[i * 2 + 1] = (Math.random() - 0.5) * 2.0;
+                initialVelocityData[i * 2] = (Math.random() - 0.5) * 0.05; initialVelocityData[i * 2 + 1] = (Math.random() - 0.5) * 0.05;
+            }
+            particleBuffer = device.createBuffer({ size: initialParticleData.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST, mappedAtCreation: true });
+            new Float32Array(particleBuffer.getMappedRange()).set(initialParticleData); particleBuffer.unmap();
+            particleVelocityBuffer = device.createBuffer({ size: initialVelocityData.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST, mappedAtCreation: true, });
+            new Float32Array(particleVelocityBuffer.getMappedRange()).set(initialVelocityData); particleVelocityBuffer.unmap();
+            attractorBuffer = device.createBuffer({ size: attractorsData.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST, });
+            updateAttractorsFromText("");
+            const wgslShaders = {
+                vertex: `struct VertexInput { @location(0) position: vec2<f32>, }; struct VertexOutput { @builtin(position) position: vec4<f32>, @location(0) particle_pos: vec2<f32>, }; @vertex fn main(input: VertexInput) -> VertexOutput { var output: VertexOutput; var aspect_ratio: f32 = f32(${canvas.width}) / f32(${canvas.height}); var pos_adj = input.position; if (aspect_ratio < 1.0) { pos_adj.x = pos_adj.x * aspect_ratio; } else { pos_adj.y = pos_adj.y / aspect_ratio; } output.position = vec4<f32>(pos_adj, 0.0, 1.0); output.particle_pos = input.position; return output; }`,
+                fragment: `struct VertexOutput { @builtin(position) position: vec4<f32>, @location(0) particle_pos: vec2<f32>,}; @fragment fn main(input: VertexOutput) -> @location(0) vec4<f32> { let dist_from_center = length(input.particle_pos); let alpha_val = smoothstep(1.5, 0.6, dist_from_center) * 0.5 + 0.03; return vec4<f32>(0.6, 0.75, 0.95, alpha_val); }`,
+                compute: `
+                    @group(0) @binding(0) var<storage, read_write> particles_pos: array<vec2<f32>>;
+                    @group(0) @binding(1) var<storage, read_write> particles_vel: array<vec2<f32>>;
+                    @group(0) @binding(2) var<storage, read> attractors: array<vec4<f32>>;
+
+                    struct Uniforms {
+                        delta_time: f32,
+                        num_attractors: u32,
+                        attraction_strength: f32,
+                        chaos_strength: f32,
+                        damping: f32,
+                        max_speed: f32,
+                        new_text_kick_intensity: f32
+                    } // <<< CORRECTED: NO SEMICOLON HERE
+                    @group(0) @binding(3) var<uniform> uniforms: Uniforms;
+
+                    var<private> rand_seed: u32 = 0u;
+                    fn next_rand() -> u32 { rand_seed = rand_seed * 1664525u + 1013904223u; return rand_seed; }
+                    fn random_float_signed() -> f32 { return (f32(next_rand()) / 4294967295.0) * 2.0 - 1.0; }
+                    fn random_float() -> f32 { return f32(next_rand()) / 4294967295.0; }
+                    fn simple_hash(n: u32) -> u32 { var nn = n; nn = (nn ^ (nn >> 16u)) * 0x45d9f3bu; nn = (nn ^ (nn >> 16u)) * 0x45d9f3bu; nn = nn ^ (nn >> 16u); return nn; }
+
+                    @compute @workgroup_size(64)
+                    fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
+                        let idx = global_id.x;
+                        if (idx >= ${PARTICLE_COUNT}u) { return; }
+                        rand_seed = simple_hash(idx + u32(uniforms.delta_time * 100000.0) + global_id.y * 11u + global_id.z * 17u);
+                        var pos = particles_pos[idx]; var vel = particles_vel[idx]; var attraction_force = vec2<f32>(0.0, 0.0);
+                        if (uniforms.num_attractors > 0u) {
+                            var min_dist_sq = 10000.0; var closest_attractor_idx = 0u;
+                            for (var i = 0u; i < uniforms.num_attractors; i = i + 1u) {
+                                if (i < arrayLength(&attractors)) {
+                                    let dist_sq = distanceSq(pos, attractors[i].xy);
+                                    if (dist_sq < min_dist_sq) { min_dist_sq = dist_sq; closest_attractor_idx = i; }
+                                } else { break; }
+                            }
+                            if (min_dist_sq < 3.0 && closest_attractor_idx < arrayLength(&attractors)) {
+                                let dir_to_attractor = normalize(attractors[closest_attractor_idx].xy - pos);
+                                let force_magnitude = uniforms.attraction_strength / (min_dist_sq + 0.5);
+                                attraction_force = dir_to_attractor * clamp(force_magnitude, 0.0, 0.002);
+                            }
+                        }
+                        vel = vel + attraction_force * uniforms.delta_time;
+                        if (uniforms.new_text_kick_intensity > 0.0) {
+                            let kick_vec = vec2<f32>(random_float_signed(), random_float_signed()) * uniforms.new_text_kick_intensity * ${NEW_TEXT_KICK_BASE_STRENGTH};
+                            vel = vel + kick_vec;
+                        }
+                        let chaos_angle = random_float() * 6.283185; let chaos_magnitude_rand = random_float() * 0.8 + 0.2;
+                        let chaos_vec = vec2<f32>(cos(chaos_angle), sin(chaos_angle)) * uniforms.chaos_strength * chaos_magnitude_rand;
+                        vel = vel + chaos_vec * uniforms.delta_time;
+                        vel = vel * (1.0 - (1.0 - uniforms.damping) * uniforms.delta_time * 60.0);
+                        let speed = length(vel); if (speed > uniforms.max_speed) { vel = normalize(vel) * uniforms.max_speed; }
+                        pos = pos + vel * uniforms.delta_time;
+                        let boundary_limit = 1.15; let repel_strength = 0.01;
+                        if (pos.x > boundary_limit) { vel.x = vel.x - repel_strength; } if (pos.x < -boundary_limit) { vel.x = vel.x + repel_strength; }
+                        if (pos.y > boundary_limit) { vel.y = vel.y - repel_strength; } if (pos.y < -boundary_limit) { vel.y = vel.y + repel_strength; }
+                        if (pos.x > boundary_limit + 0.1) { pos.x = -boundary_limit; } if (pos.x < -boundary_limit - 0.1) { pos.x = boundary_limit; }
+                        if (pos.y > boundary_limit + 0.1) { pos.y = -boundary_limit; } if (pos.y < -boundary_limit - 0.1) { pos.y = boundary_limit; }
+                        particles_pos[idx] = pos; particles_vel[idx] = vel;
+                    }
+                    fn distanceSq(p1: vec2<f32>, p2: vec2<f32>) -> f32 { let d = p1 - p2; return dot(d, d); }
+                `
+            };
+            const vertexModule = device.createShaderModule({ code: wgslShaders.vertex });
+            const fragmentModule = device.createShaderModule({ code: wgslShaders.fragment });
+            const computeModule = device.createShaderModule({ code: wgslShaders.compute });
+            pipeline = device.createRenderPipeline({ layout: device.createPipelineLayout({ bindGroupLayouts: [] }), vertex: { module: vertexModule, entryPoint: 'main', buffers: [{ arrayStride: 2 * Float32Array.BYTES_PER_ELEMENT, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x2' }],}]}, fragment: { module: fragmentModule, entryPoint: 'main', targets: [{ format: canvasFormat }] }, primitive: { topology: 'point-list' }, });
+            computeUniformBuffer = device.createBuffer({ size: 7 * Float32Array.BYTES_PER_ELEMENT, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST, });
+            const computeBindGroupLayout = device.createBindGroupLayout({ entries: [ { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } }, { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } }, { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } }, { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } } ] });
+            computeBindGroup = device.createBindGroup({ layout: computeBindGroupLayout, entries: [ { binding: 0, resource: { buffer: particleBuffer } }, { binding: 1, resource: { buffer: particleVelocityBuffer } }, { binding: 2, resource: { buffer: attractorBuffer } }, { binding: 3, resource: { buffer: computeUniformBuffer } }, ], });
+            computePipeline = device.createComputePipeline({ layout: device.createPipelineLayout({ bindGroupLayouts: [computeBindGroupLayout] }), compute: { module: computeModule, entryPoint: 'main' }, });
+            const uniformData = new ArrayBuffer(7 * 4); const uniformViewF32 = new Float32Array(uniformData); const uniformViewU32 = new Uint32Array(uniformData);
+            uniformViewF32[0] = 0.016; uniformViewF32[2] = 0.002; uniformViewF32[3] = 0.08; uniformViewF32[4] = 0.985; uniformViewF32[5] = 0.35; uniformViewF32[6] = 0.0;
+            let lastTime = performance.now();
+            function frame() {
+                if (!device) return; const currentTime = performance.now();
+                const rawDeltaTime = (currentTime - lastTime) / 1000; const deltaTime = Math.min(0.05, Math.max(0.001, rawDeltaTime) );
+                lastTime = currentTime; uniformViewF32[0] = deltaTime;
+                let activeAttractorCount = 0; for(let i=0; i < MAX_ATTRACTORS; ++i) { if (attractorsData[i*4] !== 0.0 || attractorsData[i*4+1] !== 0.0) { activeAttractorCount++; } }
+                uniformViewU32[1] = activeAttractorCount; uniformViewF32[6] = newTextKickIntensity;
+                device.queue.writeBuffer(computeUniformBuffer, 0, uniformData); if (newTextKickIntensity > 0.0) { newTextKickIntensity = 0.0; }
+                const commandEncoder = device.createCommandEncoder();
+                const passEncoderCompute = commandEncoder.beginComputePass(); passEncoderCompute.setPipeline(computePipeline); passEncoderCompute.setBindGroup(0, computeBindGroup); passEncoderCompute.dispatchWorkgroups(Math.ceil(PARTICLE_COUNT / 64)); passEncoderCompute.end();
+                const passEncoderRender = commandEncoder.beginRenderPass({ colorAttachments: [{ view: context.getCurrentTexture().createView(), loadOp: 'clear', clearValue: { r: 0.01, g: 0.01, b: 0.02, a: 1.0 }, storeOp: 'store', }], }); passEncoderRender.setPipeline(pipeline); passEncoderRender.setVertexBuffer(0, particleBuffer); passEncoderRender.draw(PARTICLE_COUNT); passEncoderRender.end();
+                device.queue.submit([commandEncoder.finish()]); animationFrameId = requestAnimationFrame(frame);
+            }
+            console.log("WebGPU setup complete, starting render loop.");
+            frame(); // Start render loop from within initWebGPU
+        }
+
+        async function main() {
+            try {
+                setupSpeechRecognition(); // Setup speech recognition object first
+                await initWebGPU();     // Then initialize WebGPU and start its rendering
+                console.log("Application main() finished initialization successfully.");
+            } catch (err) {
+                 console.error("Initialization failed in main():", err);
+                 transcriptDiv.textContent = "Critical error during initialization. Check console.";
+            }
+        }
+
+        // Start the application
+        main();
+
+        window.addEventListener('resize', () => {
+            if (device && context) {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+                // Consider updating aspect ratio in vertex shader if it's not dynamic (it is in current code)
+            }
+        });
+    </script>
+</body>
+</html>

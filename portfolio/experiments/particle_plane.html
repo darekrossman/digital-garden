@@ -1,0 +1,1285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calm Drone – Particle Plane</title>
+    <style>
+        html,body{margin:0;padding:0;width:100%;height:100%;background:#0a0a0c;overflow:hidden;font-family:sans-serif;color:#bbb}
+        canvas{width:100%;height:100%;display:block}
+        #info{position:fixed;bottom:10px;left:10px;font-size:11px;pointer-events:none;opacity:0.6}
+    </style>
+</head>
+<body>
+    <canvas id="c"></canvas>
+    <div id="info">WebGPU particle plane – move mouse to pan / wheel to zoom</div>
+
+<script type="module">
+const canvas = document.getElementById('c');
+if (!navigator.gpu){document.getElementById('info').textContent='WebGPU not supported';throw new Error('No WebGPU');}
+
+/* ---------- WebGPU SETUP ---------- */
+const adapter = await navigator.gpu.requestAdapter();
+const device  = await adapter.requestDevice();
+const ctx     = canvas.getContext('webgpu');
+const format  = navigator.gpu.getPreferredCanvasFormat();
+ctx.configure({device,format,alphaMode:'opaque'});
+
+/* ---------- PARTICLE DATA ---------- */
+const N=120000; // calm density
+const particleStride=24; // vec3 pos + vec3 vel (f32)
+const particleBuf=device.createBuffer({
+  size:N*particleStride,
+  usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST|GPUBufferUsage.COPY_SRC
+});
+{
+    const tmp=new Float32Array(N*6);
+    for(let i=0;i<N;i++){
+        // random position in [-2,2] cube
+        tmp[i*6+0]=(Math.random()*2-1)*2;
+        tmp[i*6+1]=(Math.random()*2-1)*2;
+        tmp[i*6+2]=(Math.random()*2-1)*2;
+        // small random vel
+        tmp[i*6+3]=(Math.random()*2-1)*0.0002;
+        tmp[i*6+4]=(Math.random()*2-1)*0.00002;
+        tmp[i*6+5]=(Math.random()*2-1)*0.0002;
+    }
+    device.queue.writeBuffer(particleBuf,0,tmp);
+}
+
+/* ---------- UNIFORMS ---------- */
+// time, aspect, yaw, pitch
+const uniBuf=device.createBuffer({size:4*4,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+const audioBuf=device.createBuffer({size:4*4,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST}); // bass, mid, high, dummy
+// control parameters: flowBase, flowAudioScale, viscosity, rippleBase
+const paramBuf=device.createBuffer({size:4*4,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+const impulseBuf=device.createBuffer({size:4*4,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST}); // x, strength, hueShift, pad
+const attractorBuf=device.createBuffer({size:8*16,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST}); // up to 8 attractors vec4
+
+// Total attractors (central + dynamic); kept near top because multiple initialisations rely on it 
+const ATTR_COUNT = 8; 
+
+// Per-attractor hues (vec4 but only .x used); allows stream particles to inherit colour of their source attractor
+const attractorHueBuf = device.createBuffer({size:ATTR_COUNT*16, usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+
+// Initialise hues – central attractor (index 0) fixed hue, others randomised when spawned
+const attractorHues = new Array(ATTR_COUNT).fill(0);
+attractorHues[0] = 0.6; // base hue for central attractor
+device.queue.writeBuffer(attractorHueBuf, 0, new Float32Array(attractorHues.flatMap(h=>[h,0,0,0])));
+
+// Info buffer that tells compute shader which attractors are active spawners this frame
+const spawnerAttractorInfoBuf = device.createBuffer({size:4*16, usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST}); // Max 4 spawners: vec4(x,y,z,isActive)
+
+/* ---------- STREAM PARTICLES ---------- */
+const MAX_STREAM_PARTICLES = 150000; // Increased particle capacity for denser tendril lines
+const streamParticleStride = 32; // vec3 pos (12), vec3 vel (12), f32 age (4), f32 life (4) = 32 bytes.
+const streamParticleBuffer = device.createBuffer({
+    size: MAX_STREAM_PARTICLES * streamParticleStride,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX 
+});
+
+// Initialize stream particles 
+{
+    const initialStreamData = new ArrayBuffer(MAX_STREAM_PARTICLES * streamParticleStride);
+    const streamDataView = new DataView(initialStreamData);
+    for (let i = 0; i < MAX_STREAM_PARTICLES; i++) {
+        streamDataView.setFloat32(i * streamParticleStride + 0, -1000.0, true); // pos.x
+        streamDataView.setFloat32(i * streamParticleStride + 4, -1000.0, true); // pos.y
+        streamDataView.setFloat32(i * streamParticleStride + 8, -1000.0, true); // pos.z
+        // For the shader: stream_particles[i*2u] is (pos.x, pos.y, pos.z, age_or_source_idx_float_bits)
+        // stream_particles[i*2u+1u] is (vel.x, vel.y, vel.z, life)
+        // Let's use age slot (p_data1.w) to store spawnSourceAttractorIndex as a float for simplicity in shader, JS writes it as float.
+        streamDataView.setFloat32(i * streamParticleStride + 24, 0.0, true); // age (or source index if particle active)
+        streamDataView.setFloat32(i * streamParticleStride + 28, 0.0, true); // life = 0 (dead)
+    }
+    device.queue.writeBuffer(streamParticleBuffer, 0, initialStreamData);
+}
+
+// Buffer to hold spawn requests for the compute shader
+const MAX_SPAWN_REQUESTS = 8; // Max attractor spawn events per frame (1 per attractor)
+const streamSpawnRequestsStride = 16; // attractorIndex (u32), count (u32), particle_buffer_offset (u32), 0 (u32)
+const streamSpawnRequestBuffer = device.createBuffer({
+    size: MAX_SPAWN_REQUESTS * streamSpawnRequestsStride, // For vec4<u32> in shader
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+});
+// Counter for active spawn requests
+const streamSpawnRequestCountBuf = device.createBuffer({
+    size: 4, // single u32
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC
+});
+device.queue.writeBuffer(streamSpawnRequestCountBuf, 0, new Uint32Array([0])); // Initialize to 0 requests
+
+/* ---------- SHADERS ---------- */
+const compMod=device.createShaderModule({code:`
+struct P{pos:vec3<f32>,vel:vec3<f32>};
+@group(0)@binding(0)var<storage,read_write> p:array<P>;
+@group(0)@binding(1)var<uniform> u:vec4<f32>; // time, aspect, yaw, pitch
+@group(0)@binding(2)var<uniform> a:vec4<f32>; // bass, mid, high, pad
+@group(0)@binding(3)var<uniform> c:vec4<f32>; // flowBase, flowScale, viscosity, rippleBase
+@group(0)@binding(4)var<uniform> s:vec4<f32>; // impulseX, strength, hue, pad
+@group(0)@binding(5)var<uniform> at:array<vec4<f32>,8>; // attractors (xyz, strength)
+@group(0)@binding(6)var<uniform> spwn:array<vec4<f32>,4>; // spawner attractors (xyz, isActive)
+const PARTICLE_COUNT: u32 = 120000u;
+fn hash(n:vec3<f32>)->f32{return fract(sin(dot(n,vec3<f32>(12.9898,78.233,37.719)))*43758.5453);
+}
+// simple curl-ish noise
+fn flow(pos:vec2<f32>,t:f32)->vec2<f32>{
+  let n=vec2<f32>(sin(pos.y*3.+t*0.05),cos(pos.x*3.+t*0.05));
+  return n*0.2;
+}
+@compute @workgroup_size(64)
+fn main(@builtin(global_invocation_id)id:vec3<u32>){
+ let i = id.x;
+ if(i >= PARTICLE_COUNT) {
+   return;
+ }
+ var pp=p[i];
+
+ // --- Particle Re-spawning near Spawner Attractors ---
+ let respawnDistThreshold = 3.75; // If particle is further than this, it's a candidate
+ let randomRespawnChance = 0.0005; // Small chance per frame for any particle to be respawned
+
+ if (length(pp.pos) > respawnDistThreshold || hash(pp.pos + vec3<f32>(u.x*0.1, u.y*0.1, u.z*0.1)) < randomRespawnChance) {
+    var activeSpawnerCount: u32 = 0u;
+    var spawnerIndices: array<u32, 4>; // Max 4 spawners
+
+    for (var si: u32 = 0u; si < 4u; si = si + 1u) {
+        if (spwn[si].w > 0.5) { // Check isActive flag
+            spawnerIndices[activeSpawnerCount] = si;
+            activeSpawnerCount = activeSpawnerCount + 1u;
+        }
+    }
+
+    if (activeSpawnerCount > 0u) {
+        let choice = u32(hash(pp.pos.xyx + u.x) * f32(activeSpawnerCount));
+        let chosenSpawnerIndex = spawnerIndices[choice];
+        let spawnerPos = spwn[chosenSpawnerIndex].xyz;
+
+        // Position particle very near the spawner with a small random offset
+        let randOffset = vec3<f32>(
+            hash(pp.pos.zyx * 1.1 + u.x) * 0.2 - 0.1, 
+            hash(pp.pos.xzy * 1.2 + u.y) * 0.2 - 0.1, 
+            hash(pp.pos.yxz * 1.3 + u.z) * 0.2 - 0.1
+        );
+        pp.pos = spawnerPos + randOffset * 0.1; // Spawn very close
+
+        // Initial velocity: swirling burst outwards
+        let dirToCenter = normalize(pp.pos - spawnerPos + vec3<f32>(0.0001)); // Direction from spawner to particle
+        let tangentSpeed = 0.008 + hash(pp.pos * 2.1) * 0.007; // Random tangential speed
+        let outwardSpeed = 0.005 + hash(pp.pos * 2.2) * 0.005; // Random outward speed
+        
+        // Create a random tangent vector (approximate)
+        var randomVecForCross = normalize(vec3<f32>(hash(pp.pos.yzx * 1.1 + u.x), hash(pp.pos.zxy * 1.2 + u.y), hash(pp.pos.xzy * 1.3 + u.z)));
+        var tangent = cross(dirToCenter, randomVecForCross);
+        if (length(tangent) < 0.01) { 
+            // If dirToCenter and randomVecForCross are nearly parallel, pick a default axis
+            if (abs(dirToCenter.x) < 0.9) { tangent = cross(dirToCenter, vec3<f32>(1.0,0.0,0.0)); }
+            else { tangent = cross(dirToCenter, vec3<f32>(0.0,1.0,0.0)); }
+        } 
+        tangent = normalize(tangent);
+
+        pp.vel = dirToCenter * outwardSpeed + tangent * tangentSpeed;
+        pp.vel.y += (hash(pp.pos.zxy + u.z) * 0.004 - 0.002); // Slight random vertical component
+    }
+ }
+ // --- End of Particle Re-spawning ---
+
+ let f=flow(pp.pos.xz, u.x);
+ var delta: vec2<f32> = f * (c.x + (a.x + a.z) * c.y);
+ // attraction forces
+ for(var j:u32 = 0u; j<8u; j=j+1u){
+   let att = at[j];
+   let str = att.w;
+   if(str>0.0001){
+     let diff = att.xyz - pp.pos;
+     let dist2 = max(dot(diff,diff), 0.001);
+     let force = diff * (str/dist2)*0.002;
+     pp.vel += force;
+   }
+ }
+ // localized boost from impulse on x axis
+ let dx = pp.pos.x - s.x;
+ let boost = s.y * exp(-dx*dx*25.0);
+ delta *= (1.0 + boost);
+ pp.vel.x += delta.x;
+ pp.vel.z += delta.y;
+ pp.vel*=c.z; // viscosity
+ pp.pos += pp.vel;
+ // clamp to soft bounds
+ if(length(pp.pos) > 4.0){ pp.pos = pp.pos * 0.5; pp.vel = pp.vel * -0.3; }
+ p[i]=pp;
+}`});
+
+const vertFragMod=device.createShaderModule({code:`
+struct P{pos:vec3<f32>,vel:vec3<f32>};
+@group(0)@binding(0)var<storage,read> p:array<P>;
+@group(0)@binding(1)var<uniform> u:vec4<f32>; // time, aspect, yaw, pitch
+@group(0)@binding(2)var<uniform> a:vec4<f32>; // bass, mid, high, pad
+@group(0)@binding(3)var<uniform> c:vec4<f32>; // flowBase, flowScale, viscosity, rippleBase
+@group(0)@binding(4)var<uniform> s:vec4<f32>; // impulseX, strength, hue, pad
+@group(0)@binding(5)var<uniform> at:array<vec4<f32>,8>;
+struct VOut{@builtin(position)pos:vec4<f32>,@location(0)col:vec4<f32>}; // VOut for particle system
+const PARTICLE_COUNT: u32 = 120000u;
+@vertex fn vs(@builtin(vertex_index)i:u32)->VOut{
+ var out:VOut;
+ let pr=p[i].pos;
+ var world=pr;
+ // camera (orbit)
+ let yaw=u.z;let pitch=u.w;
+ let cy = cos(yaw);
+ let sy = sin(yaw);
+ let cp = cos(pitch);
+ let sp = sin(pitch);
+ var v=vec3<f32>(
+    world.x*cy - world.z*sy,
+    world.x*sy + world.z*cy,
+    world.y);
+ var v2=vec3<f32>(v.x, v.z*cp - v.y*sp, v.z*sp + v.y*cp);
+ let persp=1.0/(1.5+v2.y);
+ let asp=u.y;
+ out.pos=vec4<f32>(v2.x*persp/asp, v2.z*persp, 0.0, 1.0);
+ 
+ // Calculate color based on z-position and hue from sound pitch
+ let zColor = (world.z + 2.0) / 4.0; // normalize z from [-2,2] to [0,1]
+ let hue = s.z + zColor * 0.5; // combine sonic pitch with z-position
+
+ // Convert HSV to RGB (with saturation/value modulated by audio)
+ let h = fract(hue) * 6.0;
+ let hi = floor(h);
+ let f = h - hi;
+ let p = 1.0;
+ let q = 1.0 - f;
+ let t = f;
+ var r = 0.0;
+ var g = 0.0;
+ var b = 0.0;
+ if(hi < 1.0) { r = p; g = t; b = 0.3; }
+ else if(hi < 2.0) { r = q; g = p; b = 0.3; }
+ else if(hi < 3.0) { r = 0.3; g = p; b = t; }
+ else if(hi < 4.0) { r = 0.3; g = q; b = p; }
+ else if(hi < 5.0) { r = t; g = 0.3; b = p; }
+ else { r = p; g = 0.3; b = q; }
+
+ // Set constant brightness (adjust dynamically as desired)
+ let brightness = 1.0;
+ out.col = vec4<f32>(r * brightness, g * brightness, b * brightness, clamp(brightness * 1.5, 0.0, 0.7));
+ return out;
+}
+@fragment fn fs(in:VOut)->@location(0)vec4<f32>{ // This is the CORRECT fragment shader for vertFragMod
+ return in.col;
+}
+`});
+
+const streamComputeShaderModule = device.createShaderModule({code: `
+struct Attractor {
+    pos: vec3<f32>,
+    strength: f32
+};
+
+// stream_particles buffer is accessed as array<vec4<f32>>
+// Each particle uses two vec4 elements:
+// particle[i*2]   = vec4<f32>(pos.x, pos.y, pos.z, spawn_source_attractor_idx_as_float)
+// particle[i*2+1] = vec4<f32>(vel.x, vel.y, vel.z, life)
+
+@group(0) @binding(0) var<storage, read_write> stream_particles: array<vec4<f32>>; 
+@group(0) @binding(1) var<uniform> u: vec4<f32>; // u.x: totalTime, u.y: aspect, u.z: yaw, u.w: pitch. JS should ensure this is updated.
+@group(0) @binding(2) var<storage, read> attractors: array<Attractor>; // Corresponds to attractorBuf, assumed to have ATTR_COUNT (8) elements
+@group(0) @binding(3) var<storage, read_write> spawn_request_active_count: u32;
+@group(0) @binding(4) var<storage, read> spawn_requests: array<vec4<u32>>; // attractor_shader_idx, num_to_spawn, particle_buffer_offset, unused
+
+const MAX_STREAM_PARTICLES_CONST: u32 = 150000u;
+const MAX_LIFE_CONST: f32 = 3.5; 
+const NUM_ATTRACTORS_CONST: u32 = 8u; // ATTR_COUNT from JS
+const MAX_SPAWN_REQUESTS_CONST: u32 = 8u;
+
+fn hash(n:vec3<f32>)->f32{return fract(sin(dot(n,vec3<f32>(12.9898,78.233,37.719)))*43758.5453);}
+
+@compute @workgroup_size(64)
+fn main(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(local_invocation_id) local_id: vec3<u32>) {
+    let particle_idx = global_id.x;
+    let workgroup_idx = global_id.x / 64u; 
+
+    // --- Spawning Logic ---
+    if (workgroup_idx < spawn_request_active_count && workgroup_idx < MAX_SPAWN_REQUESTS_CONST) {
+        let request_idx = workgroup_idx; 
+        let request = spawn_requests[request_idx];
+        let attractor_shader_idx = request.x;
+        let num_this_request = request.y;
+        let base_particle_offset_for_request = request.z;
+
+        if (attractor_shader_idx < NUM_ATTRACTORS_CONST && attractors[attractor_shader_idx].strength > 0.01) {
+            let attractor_pos = attractors[attractor_shader_idx].pos;
+            for (var k: u32 = local_id.x; k < num_this_request; k = k + 64u) {
+                let current_particle_to_spawn_id = base_particle_offset_for_request + k;
+                if (current_particle_to_spawn_id >= MAX_STREAM_PARTICLES_CONST) { break; }
+
+                let rand_seed = attractor_pos + u.xxx + vec3<f32>(f32(k), f32(request_idx), f32(current_particle_to_spawn_id));
+                let rand_offset = vec3<f32>(hash(rand_seed) - 0.5, hash(rand_seed.yxz) - 0.5, hash(rand_seed.zyx) - 0.5) * 0.1;
+                // Write full vec4 values instead of attempting partial .xyz writes (not allowed in WGSL)
+                let baseIndex = current_particle_to_spawn_id * 2u;
+
+                // Position + source index (w component)
+                stream_particles[baseIndex] = vec4<f32>(attractor_pos + rand_offset,
+                                                       f32(attractor_shader_idx));
+
+                // Velocity + life
+                let burst_speed = 0.02 + hash(rand_seed * 1.1) * 0.025;
+                var outward_dir = normalize(rand_offset);
+                if (length(outward_dir) < 0.01) {
+                    outward_dir = normalize(vec3<f32>(hash(rand_seed*1.2)-0.5,
+                                                     hash(rand_seed*1.3)-0.5,
+                                                     hash(rand_seed*1.4)-0.5));
+                }
+                if (length(outward_dir) < 0.01) { outward_dir = vec3<f32>(1.0,0.0,0.0); }
+
+                stream_particles[baseIndex + 1u] = vec4<f32>(outward_dir * burst_speed,
+                                                            MAX_LIFE_CONST * (0.75 + hash(outward_dir + u.xxx)*0.25));
+            }
+        }
+    }
+    // The JS side resets spawn_request_active_count each frame via writeBuffer,
+    // so we avoid modifying it here to prevent potential cross-workgroup races.
+    workgroupBarrier();
+
+    // --- Simulation Logic ---
+    if (particle_idx >= MAX_STREAM_PARTICLES_CONST) { return; }
+
+    var p_data_pos_source_idx = stream_particles[particle_idx * 2u];
+    var p_data_vel_life = stream_particles[particle_idx * 2u + 1u];
+    var pos = p_data_pos_source_idx.xyz;
+    var vel = p_data_vel_life.xyz;
+    var life = p_data_vel_life.w;
+    let spawn_source_idx = u32(p_data_pos_source_idx.w);
+    let age_norm = 1.0 - clamp(life / MAX_LIFE_CONST, 0.0, 1.0);
+
+    if (life <= 0.0) { return; }
+
+    var net_force = vec3<f32>(0.0);
+    let fixed_dt = 0.0166; // Consider u.y as dt if available: let dt = u.y;
+
+    if (spawn_source_idx < NUM_ATTRACTORS_CONST && attractors[spawn_source_idx].strength > 0.01) {
+        if (age_norm < 0.15) {
+            let source_att_pos = attractors[spawn_source_idx].pos;
+            let diff_to_source = pos - source_att_pos;
+            let dist_sq = dot(diff_to_source, diff_to_source);
+            if (dist_sq > 0.0001) {
+                net_force += normalize(diff_to_source) * 0.1 * (1.0 - age_norm / 0.15);
+            }
+        }
+    }
+
+    let general_attraction_K = 0.3;
+    for (var j: u32 = 0u; j < NUM_ATTRACTORS_CONST; j = j + 1u) {
+        let att = attractors[j];
+        if (att.strength > 0.01) {
+            let diff = att.pos - pos;
+            let dist_sq = max(0.01, dot(diff, diff)); 
+            var strength_factor = att.strength;
+            if (j == spawn_source_idx && age_norm >= 0.15) {
+                 strength_factor *= 0.3;
+            }
+            net_force += normalize(diff) * strength_factor * general_attraction_K / (dist_sq * (0.5 + dist_sq));
+        }
+    }
+
+    vel += net_force * fixed_dt; 
+    vel *= 0.96;
+
+    let speed = length(vel);
+    if (speed > 0.075) { vel = normalize(vel) * 0.075; }
+
+    pos += vel * fixed_dt;
+    life -= fixed_dt; 
+
+    // Update particle data (write full vec4 values instead of partial swizzles)
+    stream_particles[particle_idx * 2u] = vec4<f32>(pos, stream_particles[particle_idx * 2u].w);
+    stream_particles[particle_idx * 2u + 1u] = vec4<f32>(vel, life);
+}
+`});
+
+const streamRenderShaderModule = device.createShaderModule({code: `
+struct StreamParticleVSInput { 
+    @location(0) pos_and_spawn_idx_float: vec4<f32>, // pos.xyz, spawn_source_idx_as_float
+    @location(1) vel_and_life: vec4<f32>,          // vel.xyz, life
+};
+
+@group(0) @binding(0) var<uniform> u: vec4<f32>; // u.x: totalTime, u.y: aspect, u.z: yaw, u.w: pitch
+@group(1) @binding(0) var<uniform> attHues: array<vec4<f32>,8>; // .x holds hue per attractor
+const MAX_LIFE_RENDER_CONST: f32 = 3.5; // Must match MAX_LIFE_CONST in compute shader
+
+struct VertexOutput {
+    @builtin(position) position: vec4<f32>,
+    @location(0) color: vec4<f32>
+};
+
+@vertex
+fn vs(particle: StreamParticleVSInput) -> VertexOutput {
+    var out: VertexOutput;
+    let pos = particle.pos_and_spawn_idx_float.xyz;
+    let life = particle.vel_and_life.w;
+    let spawn_idx_float = particle.pos_and_spawn_idx_float.w;
+
+    if (life <= 0.0) {
+        out.position = vec4<f32>(-2.0, -2.0, -2.0, 1.0);
+        out.color = vec4<f32>(0.0,0.0,0.0,0.0);
+        return out;
+    }
+
+    let world = pos;
+    let yaw = u.z; let pitch = u.w;
+    let cy = cos(yaw); let sy = sin(yaw);
+    let cp = cos(pitch); let sp = sin(pitch);
+    var v_cam = vec3<f32>(world.x*cy - world.z*sy, world.x*sy + world.z*cy, world.y);
+    var v2_cam = vec3<f32>(v_cam.x, v_cam.z*cp - v_cam.y*sp, v_cam.z*sp + v_cam.y*cp);
+    let persp = 1.0 / (1.5 + v2_cam.y); 
+    out.position = vec4<f32>(v2_cam.x * persp / u.y, v2_cam.z * persp, 0.0, 1.0);
+
+    let remaining_life_norm = clamp(life / MAX_LIFE_RENDER_CONST, 0.0, 1.0);
+    let brightness = remaining_life_norm * remaining_life_norm;
+    var hue: f32 = 0.6;
+    let idx = u32(clamp(spawn_idx_float, 0.0, 7.0));
+    hue = attHues[idx].x;
+
+    // Convert HSV to RGB (with saturation/value modulated by audio)
+    let h = fract(hue) * 6.0;
+    let hi = floor(h);
+    let f = h - hi;
+    let p = 1.0;
+    let q = 1.0 - f;
+    let t = f;
+    var r = 0.0;
+    var g = 0.0;
+    var b = 0.0;
+    if(hi < 1.0) { r = p; g = t; b = 0.3; }
+    else if(hi < 2.0) { r = q; g = p; b = 0.3; }
+    else if(hi < 3.0) { r = 0.3; g = p; b = t; }
+    else if(hi < 4.0) { r = 0.3; g = q; b = p; }
+    else if(hi < 5.0) { r = t; g = 0.3; b = p; }
+    else { r = p; g = 0.3; b = q; }
+
+    out.color = vec4<f32>(r * brightness, g * brightness, b * brightness, clamp(brightness * 1.5, 0.0, 0.7));
+    return out;
+}
+
+@fragment
+fn fs(in: VertexOutput) -> @location(0) vec4<f32> {
+    if (in.color.a <= 0.01) { discard; }
+    return in.color;
+}
+`});
+
+/* ---------- PIPELINES ---------- */
+const compPipe=device.createComputePipeline({layout:'auto',compute:{module:compMod,entryPoint:'main'}});
+const renderPipe=device.createRenderPipeline({layout:'auto',
+  vertex:{module:vertFragMod,entryPoint:'vs'},
+  fragment:{module:vertFragMod,entryPoint:'fs',targets:[{format,blend:{color:{srcFactor:'src-alpha',dstFactor:'one',operation:'add'},alpha:{srcFactor:'one',dstFactor:'one-minus-src-alpha',operation:'add'}}}]},
+  primitive:{topology:'point-list'}
+});
+
+const streamComputePipeline = device.createComputePipeline({
+    layout: 'auto',
+    compute: { module: streamComputeShaderModule, entryPoint: 'main' }
+});
+
+const streamRenderPipeline = device.createRenderPipeline({
+    layout: 'auto',
+    vertex: {
+        module: streamRenderShaderModule,
+        entryPoint: 'vs',
+        buffers: [{ // Describes the layout of streamParticleBuffer when used as a vertex buffer
+            arrayStride: streamParticleStride, // 32 bytes
+            attributes: [
+                { shaderLocation: 0, offset: 0, format: 'float32x4' },  // pos_and_spawn_idx_float (pos.xyz, spawn_idx_float)
+                { shaderLocation: 1, offset: 16, format: 'float32x4' } // vel_and_life (vel.xyz, life)
+            ]
+        }]
+    },
+    fragment: {
+        module: streamRenderShaderModule,
+        entryPoint: 'fs',
+        targets: [{ format, blend:{color:{srcFactor:'src-alpha',dstFactor:'one',operation:'add'},alpha:{srcFactor:'one',dstFactor:'one-minus-src-alpha',operation:'add'}}}]
+    },
+    primitive: { topology: 'point-list' }
+});
+
+const compBG=device.createBindGroup({layout:compPipe.getBindGroupLayout(0),entries:[
+  {binding:0,resource:{buffer:particleBuf}},
+  {binding:1,resource:{buffer:uniBuf}},
+  {binding:2,resource:{buffer:audioBuf}},
+  {binding:3,resource:{buffer:paramBuf}},
+  {binding:4,resource:{buffer:impulseBuf}},
+  {binding:5,resource:{buffer:attractorBuf}},
+  {binding:6,resource:{buffer:spawnerAttractorInfoBuf}}
+]});
+const renBG=device.createBindGroup({layout:renderPipe.getBindGroupLayout(0),entries:[
+  {binding:0,resource:{buffer:particleBuf}},
+  {binding:1,resource:{buffer:uniBuf}},
+  {binding:4,resource:{buffer:impulseBuf}}
+]});
+
+const streamComputeBG = device.createBindGroup({
+    layout: streamComputePipeline.getBindGroupLayout(0),
+    entries: [
+        { binding: 0, resource: { buffer: streamParticleBuffer } },
+        { binding: 1, resource: { buffer: uniBuf } }, 
+        { binding: 2, resource: { buffer: attractorBuf } },
+        { binding: 3, resource: { buffer: streamSpawnRequestCountBuf } },
+        { binding: 4, resource: { buffer: streamSpawnRequestBuffer } }
+    ]
+});
+
+const streamRenderBG = device.createBindGroup({
+    layout: streamRenderPipeline.getBindGroupLayout(0), // Shader uses group 0 for uniBuf
+    entries: [
+        { binding: 0, resource: { buffer: uniBuf } }
+        // Vertex buffer streamParticleBuffer is set separately with rpass.setVertexBuffer()
+    ]
+});
+
+const streamRenderHueBG = device.createBindGroup({
+    layout: streamRenderPipeline.getBindGroupLayout(1),
+    entries: [
+        { binding: 0, resource: { buffer: attractorHueBuf } }
+    ]
+});
+
+/* ---------- AUDIO ---------- */
+const ctxA=new (window.AudioContext||window.webkitAudioContext)();
+const analyser=ctxA.createAnalyser();
+analyser.fftSize=512;const freqData=new Uint8Array(analyser.frequencyBinCount);
+
+// Generative FM drone
+// function createFmVoice(base){ ... } // Already commented
+
+// let voices=[]; // Already commented
+// function initDrone(){ ... } // Already commented
+// function stopDrone(){ ... } // Already commented
+
+// Cross-modulation ... // Already commented
+
+// const mix=ctxA.createGain(); // Remove
+const master=ctxA.createGain(); master.gain.value=0.0; // Remove, master gain is for drone
+
+// Dynamic compressor ... // Remove
+// const compressor = ctxA.createDynamicsCompressor(); ... // Remove
+
+// Limiter ... // Remove
+// const limiter = ctxA.createDynamicsCompressor(); ... // Remove
+
+// Audio activity tracker ... // Remove
+// let activeVoices = 0; ... // Remove
+// const voiceCounter = { ... }; // Remove
+
+// Initialize mix gain ... // Remove
+// mix.gain.value = 0.85; // Remove
+
+// Signal flow: 
+// master.connect(analyser); // This will be handled by mic logic if mic is on
+// analyser.connect(ctxA.destination); // Ensure analyser is not connected to output
+
+// More complex evolving parameters - smooth out transitions to avoid clicks // Already commented
+// setInterval(()=>{ ... }, 8000);
+
+// UI toggle for audio // Already commented
+// const audioBtn=document.createElement('button'); ... // Already commented
+// let audioOn=false; // Remove, no longer needed
+// audioBtn.addEventListener('click',async()=>{ ... }); // Already commented
+
+// -------- Microphone toggle --------
+const micBtn=document.createElement('button');
+micBtn.id='micBtn';
+micBtn.textContent='🎤 Mic Off';
+Object.assign(micBtn.style,{position:'fixed',top:'10px',right:'10px',padding:'6px 10px',fontSize:'12px',zIndex:'10',opacity:'0.8'}); // Adjusted position
+document.body.appendChild(micBtn);
+
+let micOn=false, micStream=null, micSource=null;
+async function enableMic(){
+  try{
+    await ctxA.resume(); // Resume context when mic is enabled
+    micStream = await navigator.mediaDevices.getUserMedia({audio:true});
+    if(micSource) micSource.disconnect();
+    micSource = ctxA.createMediaStreamSource(micStream);
+    // stop and disconnect drone // Already handled by removal
+    // try{ master.disconnect(analyser); }catch(e){} // master is removed
+    micSource.connect(analyser);
+    // do NOT route analyser to speakers
+    // ensure analyser has no destination connection
+    micOn=true; micBtn.textContent='🎤 Mic On';
+    // Ensure drones muted // Already handled
+    // master.gain.setTargetAtTime(0,ctxA.currentTime,0.2); // master is removed
+    // audioOn=false; // audioOn removed
+    // audioBtn.textContent='🔇 Audio'; // audioBtn removed
+  }catch(err){ console.error(err); alert('Mic access denied'); }
+}
+
+function disableMic(){
+  if(micSource){micSource.disconnect(analyser); micSource=null;} // Disconnect from analyser
+  if(micStream){micStream.getTracks().forEach(t=>t.stop()); micStream=null;}
+  micOn=false; micBtn.textContent='🎤 Mic Off';
+  // reconnect master to analyser path // No master
+}
+
+micBtn.addEventListener('click',()=>{
+  if(!micOn){enableMic();}else{disableMic();}
+});
+
+/* ---------- CAMERA ---------- */
+let yaw=0,pitch=-0.35;
+let targetYaw=0, targetPitch=-0.35;
+let zoom=1.0, targetZoom=1.0;
+let autoRotate=true, autoRotateSpeed=0.0001;
+let globalRotateSpeed=0.00015;
+let cameraTransitionSpeed=0.1;
+
+// Physics parameter sets for transitions
+const physicsSets = [
+  // Default balanced set
+  {
+    flowBase: 0.0002,
+    flowScale: 0.001,
+    viscosity: 0.96, // Fixed lower value
+    rippleBase: 0.03,
+    particleSpeed: 1.0,
+    attractorStrength: 0.8
+  },
+  // High-flow, more chaotic set
+  {
+    flowBase: 0.0005,
+    flowScale: 0.002,
+    viscosity: 0.96, // Fixed lower value
+    rippleBase: 0.06,
+    particleSpeed: 1.5,
+    attractorStrength: 1.2
+  },
+  // Low-flow, more stable set
+  {
+    flowBase: 0.00012,
+    flowScale: 0.0005,
+    viscosity: 0.96, // Fixed lower value
+    rippleBase: 0.01,
+    particleSpeed: 0.7,
+    attractorStrength: 0.5
+  },
+  // Vortex-like set
+  {
+    flowBase: 0.0003,
+    flowScale: 0.0015,
+    viscosity: 0.96, // Fixed lower value
+    rippleBase: 0.04,
+    particleSpeed: 1.2,
+    attractorStrength: 1.0
+  }
+];
+
+let currentPhysicsSet = 0;
+let targetPhysicsSet = 0;
+let physicsTransitionProgress = 1.0; // 1.0 = fully transitioned
+
+// Grid for tracking particle density
+const densityGrid = {
+  resolution: 8, // 8x8x8 grid
+  cells: new Float32Array(8*8*8).fill(0),
+  highestDensityCell: {x: 0, y: 0, z: 0},
+  
+  // Reset all cell counts
+  reset() {
+    this.cells.fill(0);
+  },
+  
+  // Add a particle to the appropriate grid cell
+  addParticle(x, y, z) {
+    // Convert from world space (-2 to 2) to grid space (0 to resolution-1)
+    const gridX = Math.floor(((x + 2) / 4) * this.resolution);
+    const gridY = Math.floor(((y + 2) / 4) * this.resolution);
+    const gridZ = Math.floor(((z + 2) / 4) * this.resolution);
+    
+    // Bounds check
+    if (gridX >= 0 && gridX < this.resolution && 
+        gridY >= 0 && gridY < this.resolution &&
+        gridZ >= 0 && gridZ < this.resolution) {
+      // Increment the cell counter
+      const index = gridX + (gridY * this.resolution) + (gridZ * this.resolution * this.resolution);
+      this.cells[index]++;
+    }
+  },
+  
+  // Find the cell with the highest density
+  findHighestDensity() {
+    let maxDensity = 0;
+    let maxIndex = 0;
+    
+    for (let i = 0; i < this.cells.length; i++) {
+      if (this.cells[i] > maxDensity) {
+        maxDensity = this.cells[i];
+        maxIndex = i;
+      }
+    }
+    
+    // Convert index back to 3D coordinates
+    const gridZ = Math.floor(maxIndex / (this.resolution * this.resolution));
+    const remaining = maxIndex % (this.resolution * this.resolution);
+    const gridY = Math.floor(remaining / this.resolution);
+    const gridX = remaining % this.resolution;
+    
+    // Convert from grid space to world space (center of the cell)
+    const worldX = ((gridX + 0.5) / this.resolution * 4) - 2;
+    const worldY = ((gridY + 0.5) / this.resolution * 4) - 2;
+    const worldZ = ((gridZ + 0.5) / this.resolution * 4) - 2;
+    
+    this.highestDensityCell = {x: worldX, y: worldY, z: worldZ, density: maxDensity};
+    return this.highestDensityCell;
+  }
+};
+
+canvas.addEventListener('mousemove',e=>{
+  if(e.buttons){
+    autoRotate=false; // Disable auto-rotation when manually moving
+    targetYaw+=e.movementX*0.002;
+    targetPitch+=e.movementY*0.002;
+    targetPitch=Math.max(-1.2,Math.min(-0.1,targetPitch));
+  }
+});
+
+canvas.addEventListener('wheel',e=>{
+  targetZoom=Math.max(0.5,Math.min(2.0,targetZoom+e.deltaY*-0.0005));
+});
+
+function updateCamera(deltaTime) {
+  // Smooth transitions to target values
+  yaw += (targetYaw - yaw) * cameraTransitionSpeed;
+  pitch += (targetPitch - pitch) * cameraTransitionSpeed;
+  // Zoom is now primarily driven by audio in frame(), then smoothed here
+  zoom += (targetZoom - zoom) * (cameraTransitionSpeed * 0.5); 
+  zoom = Math.max(0.3, Math.min(3.0, zoom)); // Apply final clamping here for safety, widened range
+  
+  // Apply auto-rotation if enabled
+  if(autoRotate) {
+    // Rotate on camera axis (yaw)
+    targetYaw += autoRotateSpeed * deltaTime;
+    
+    // Apply subtle global rotation on pitch
+    targetPitch += Math.sin(performance.now() * 0.0001) * globalRotateSpeed * deltaTime;
+    targetPitch = Math.max(-1.2, Math.min(-0.1, targetPitch));
+  }
+  
+  // If we're tracking density, adjust camera to point at highest density area
+  if (autoRotate && densityGrid.highestDensityCell) {
+    const highDensity = densityGrid.highestDensityCell;
+    
+    // Calculate angle to highest density cell
+    // Simple version: just adjust yaw to face the x,z position of the highest density
+    const angleToTarget = Math.atan2(highDensity.z, highDensity.x);
+    
+    // Gradually adjust target yaw to face this direction
+    const currentAngle = targetYaw % (Math.PI * 2);
+    let angleDiff = angleToTarget - currentAngle;
+    
+    // Handle wrapping for smoothest rotation
+    if (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+    if (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+    
+    // Adjust target with a slow weighting to avoid jerky movements
+    targetYaw += angleDiff * 0.002 * deltaTime;
+    
+    // Adjust pitch slightly based on y-position of highest density
+    const pitchToTarget = -0.35 + (highDensity.y / 4) * 0.2; 
+    targetPitch += (pitchToTarget - targetPitch) * 0.001 * deltaTime;
+    targetPitch = Math.max(-1.2, Math.min(-0.1, targetPitch));
+  }
+}
+
+function triggerCameraMovement() {
+  // Move to a new random viewing angle, but keep looking at center
+  targetYaw = yaw + (Math.random() * 2 - 1) * 0.4;
+  targetPitch = -0.35 + (Math.random() * 2 - 1) * 0.1;
+  targetPitch = Math.max(-1.2, Math.min(-0.1, targetPitch));
+  
+  // Quick transition
+  cameraTransitionSpeed = 0.08 + Math.random() * 0.04;
+  
+  // Enable auto rotation
+  autoRotate = true;
+  
+  // Randomize rotation speeds slightly
+  autoRotateSpeed = 0.00008 + Math.random() * 0.00002;
+  globalRotateSpeed = 0.0001 + Math.random() * 0.000025;
+  
+  // Set random zoom level
+  // targetZoom = 0.8 + Math.random() * 0.4; // This will be overridden by audio-driven zoom shortly
+  
+  // Randomize zoom modulation
+  // zoomModulationAmount = 0.1 + Math.random() * 0.1; // Will be replaced/influenced by audio
+  // zoomModulationSpeed = 0.0001 + Math.random() * 0.0001; // Will be replaced/influenced by audio
+  
+  // Transition to a new physics set
+  const newPhysicsSet = Math.floor(Math.random() * physicsSets.length);
+  // Try to avoid choosing the same set
+  targetPhysicsSet = (newPhysicsSet === currentPhysicsSet) ? 
+    (currentPhysicsSet + 1) % physicsSets.length : newPhysicsSet;
+  physicsTransitionProgress = 0.0; // Start transition
+}
+
+// Function to get interpolated physics values
+function getCurrentPhysicsParams() {
+  // If transition complete, just return target set values
+  if (physicsTransitionProgress >= 1.0) {
+    return physicsSets[currentPhysicsSet];
+  }
+  
+  // Otherwise interpolate between current and target
+  const current = physicsSets[currentPhysicsSet];
+  const target = physicsSets[targetPhysicsSet];
+  const t = physicsTransitionProgress;
+  
+  return {
+    flowBase: current.flowBase + (target.flowBase - current.flowBase) * t,
+    flowScale: current.flowScale + (target.flowScale - current.flowScale) * t,
+    viscosity: current.viscosity + (target.viscosity - current.viscosity) * t,
+    rippleBase: current.rippleBase + (target.rippleBase - current.rippleBase) * t,
+    particleSpeed: current.particleSpeed + (target.particleSpeed - current.particleSpeed) * t,
+    attractorStrength: current.attractorStrength + (target.attractorStrength - current.attractorStrength) * t
+  };
+}
+
+/* ---------- FRAME LOOP ---------- */
+let lastTime = performance.now();
+let start=performance.now();
+let nextStreamParticleSpawnIndex = 0; // To round-robin through streamParticleBuffer for new spawns
+const streamSpawnRequestsJS = []; // Array to hold { attractorIndex, count, particleBufferOffset } for GPU spawner
+                                 // This will be used to tell the GPU spawner what to do.
+
+function frame(){
+  const now = performance.now();
+  const deltaTime = (now - lastTime) * 0.001; // deltaTime in seconds
+  lastTime = now;
+  
+  const t=(now-start)/1000;
+  
+  // Update camera animations
+  updateCamera(deltaTime);
+  
+  // Update physics transition if in progress
+  if (physicsTransitionProgress < 1.0) {
+    physicsTransitionProgress = Math.min(1.0, physicsTransitionProgress + 0.003);
+    
+    // If we've reached the end of transition, update current set
+    if (physicsTransitionProgress >= 1.0) {
+      currentPhysicsSet = targetPhysicsSet;
+    }
+  }
+  
+  // Get current interpolated physics parameters
+  const physics = getCurrentPhysicsParams();
+  if(!paramLocked.flowBase) flowBase = physics.flowBase;
+  if(!paramLocked.flowScale) flowScale = physics.flowScale;
+  if(!paramLocked.viscosity) viscosity = physics.viscosity;
+  if(!paramLocked.rippleBase) rippleBase = physics.rippleBase;
+  
+  // Reset density grid for this frame
+  densityGrid.reset();
+  
+  // Density analysis needs to be done on CPU by reading back particle buffer
+  // We'll do this periodically (not every frame to save performance)
+  if (frameCount % 30 === 0) { // Every 30 frames, ~twice per second
+    const readbackBuffer = device.createBuffer({
+      size: N * particleStride,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
+    });
+    
+    const encoder = device.createCommandEncoder();
+    encoder.copyBufferToBuffer(particleBuf, 0, readbackBuffer, 0, N * particleStride);
+    device.queue.submit([encoder.finish()]);
+    
+    // Schedule buffer readback and density analysis
+    setTimeout(async () => {
+      await readbackBuffer.mapAsync(GPUMapMode.READ);
+      const data = new Float32Array(readbackBuffer.getMappedRange());
+      
+      // Analyze a subset of particles for efficiency
+      const sampleSize = 5000; // Check ~5000 particles
+      const stride = Math.floor(N / sampleSize);
+      
+      for (let i = 0; i < N; i += stride) {
+        const x = data[i * 6];
+        const y = data[i * 6 + 1];
+        const z = data[i * 6 + 2];
+        densityGrid.addParticle(x, y, z);
+      }
+      
+      // Find highest density region
+      densityGrid.findHighestDensity();
+      
+      readbackBuffer.unmap();
+    }, 0);
+  }
+  
+  analyser.getByteFrequencyData(freqData);
+  // simplistic energy
+  let bass=0,mid=0,high=0;
+  for(let i=0;i<freqData.length;i++){
+    const v=freqData[i]/255;
+    if(i<10)bass+=v; else if(i<40) mid+=v; else high+=v;
+  }
+  bass/=10;mid/=30;high/=(freqData.length-40);
+  // add decaying impact
+  high+=impact;
+  impact*=0.9;
+
+  // --- Pitch-driven Random Parameter Modulation ---
+  let pitchFactor = 0;
+  if (bass + mid > 0.01) { // Avoid division by zero or extreme values if silent
+      pitchFactor = (high + 0.01) / (bass + mid + 0.02); // Add small epsilon to prevent extreme ratios
+  }
+  pitchFactor = Math.min(3, Math.max(0.2, pitchFactor)); // Clamp to a reasonable range (e.g., 0.2 to 3)
+
+  if (micOn && frameCount % 180 === 0 && frameCount > 0) { // Modulate every ~3 seconds, not on frame 0
+      const randomChoice = Math.floor(Math.random() * 7); // 0 to 6
+
+      switch (randomChoice) {
+          case 0: // Modulate flowBase
+              if (!paramLocked.flowBase) {
+                  const change = (Math.random() * 0.00008 - 0.00004) * pitchFactor;
+                  flowBase += change;
+                  flowBase = Math.max(0.00005, Math.min(0.0008, flowBase)); // Clamp
+                  // console.log(`Pitch mod: flowBase to ${flowBase.toFixed(5)} (pitchF: ${pitchFactor.toFixed(2)})`);
+              }
+              break;
+          case 1: // Modulate flowScale
+              if (!paramLocked.flowScale) {
+                  const change = (Math.random() * 0.0004 - 0.0002) * pitchFactor;
+                  flowScale += change;
+                  flowScale = Math.max(0.0001, Math.min(0.004, flowScale)); // Clamp
+                  // console.log(`Pitch mod: flowScale to ${flowScale.toFixed(5)} (pitchF: ${pitchFactor.toFixed(2)})`);
+              }
+              break;
+          case 3: // Modulate rippleBase
+              if (!paramLocked.rippleBase) {
+                  const change = (Math.random() * 0.008 - 0.004) * pitchFactor;
+                  rippleBase += change;
+                  rippleBase = Math.max(0.005, Math.min(0.08, rippleBase)); // Clamp
+                  // console.log(`Pitch mod: rippleBase to ${rippleBase.toFixed(3)} (pitchF: ${pitchFactor.toFixed(2)})`);
+              }
+              break;
+          case 4: // Modulate sparkCount
+              const sparkChange = pitchFactor > 1.5 ? 1 : (pitchFactor < 0.7 && sparkCount > 1 ? -1 : 0);
+              if (sparkChange !== 0) {
+                  sparkCount += sparkChange;
+                  sparkCount = Math.max(1, Math.min(10, sparkCount)); // Clamp
+                  // console.log(`Pitch mod: sparkCount to ${sparkCount} (pitchF: ${pitchFactor.toFixed(2)})`);
+              }
+              break;
+          case 5: // Modulate linkDistance
+              const linkChange = (pitchFactor > 1.3 ? 0.15 : (pitchFactor < 0.8 ? -0.1 : 0)) * Math.random();
+              if (linkChange !== 0) {
+                  linkDistance += linkChange;
+                  linkDistance = Math.max(1.5, Math.min(5.0, linkDistance)); // Clamp
+                  // console.log(`Pitch mod: linkDistance to ${linkDistance.toFixed(2)} (pitchF: ${pitchFactor.toFixed(2)})`);
+              }
+              break;
+          case 6: // Modulate impulseHue (visual feedback for impulses)
+              const hueChange = (pitchFactor - 1.0) * 0.05 * (Math.random() * 0.5 + 0.75); // Smaller, randomized hue change
+              impulseHue = (impulseHue + hueChange + 1.0) % 1.0; 
+              // console.log(`Pitch mod: impulseHue to ${impulseHue.toFixed(2)} (pitchF: ${pitchFactor.toFixed(2)})`);
+              break;
+      }
+  }
+  // --- End of Pitch-driven Random Parameter Modulation ---
+
+  // generative evolution of simulation parameters
+  if(!paramLocked.flowBase) flowBase += ((0.00015 + bass*0.00035) - flowBase) * 0.02;
+  if(!paramLocked.flowScale) flowScale += ((0.0008 + bass*0.0015) - flowScale) * 0.02;
+  if(!paramLocked.rippleBase) rippleBase += ((0.02 + mid*0.07 + impact*0.05) - rippleBase) * 0.05;
+  rippleBase = Math.min(Math.max(rippleBase, 0.0), 0.15); // Clamped after general audio reaction
+  // decay impulse strength
+  impulseStrength*=0.96;
+  // write uniforms (time block)
+  device.queue.writeBuffer(uniBuf,0,new Float32Array([t,canvas.width/canvas.height,yaw,pitch*zoom]));
+  // audio metrics buffer
+  device.queue.writeBuffer(audioBuf,0,new Float32Array([bass,mid,high,0]));
+  // impulse buffer update (strength decays)
+  device.queue.writeBuffer(impulseBuf,0,new Float32Array([impulseX,impulseStrength,impulseHue,0]));
+  // param buffer
+  device.queue.writeBuffer(paramBuf,0,new Float32Array([flowBase,flowScale,viscosity,rippleBase]));
+  // update attractors and buffer
+  updateAttractors(physics.attractorStrength);
+  const attArr=new Float32Array(ATTR_COUNT*4);
+  const spawnerArr = new Float32Array(4 * 4); 
+  spawnerArr.fill(0.0); 
+  attArr[0]=0;attArr[1]=0;attArr[2]=0;attArr[3]=Math.max(-1.5,Math.min(1.5,(bass-high)*1.5)); // Central attractor
+  let currentSpawnerIndex = 0;
+  for(let k=0;k<attractors.length && k<DYN_ATTR_MAX;k++){
+    const att=attractors[k];
+    const shaderAttIdx = k + 1; // Dynamic attractors start at index 1 in attractorBuf for shader
+    attArr[shaderAttIdx*4+0]=att.x;
+    attArr[shaderAttIdx*4+1]=att.y;
+    attArr[shaderAttIdx*4+2]=att.z;
+    attArr[shaderAttIdx*4+3]=att.strength;
+    if (att.isNew && att.wasTransient && currentSpawnerIndex < 4) {
+        spawnerArr[currentSpawnerIndex * 4 + 0] = att.x;
+        spawnerArr[currentSpawnerIndex * 4 + 1] = att.y;
+        spawnerArr[currentSpawnerIndex * 4 + 2] = att.z;
+        spawnerArr[currentSpawnerIndex * 4 + 3] = 1.0; 
+        currentSpawnerIndex++;
+    }
+  }
+  device.queue.writeBuffer(attractorBuf,0,attArr);
+  device.queue.writeBuffer(spawnerAttractorInfoBuf, 0, spawnerArr);
+  
+  // Handle GPU Spawning Requests from JavaScript events (e.g., new attractor)
+  if (streamSpawnRequestsJS.length > 0) {
+      const numActiveRequests = Math.min(streamSpawnRequestsJS.length, MAX_SPAWN_REQUESTS);
+      const requestDataArray = new Uint32Array(numActiveRequests * 4); // Each request is vec4<u32>
+      for (let i = 0; i < numActiveRequests; i++) {
+          const req = streamSpawnRequestsJS[i];
+          requestDataArray[i * 4 + 0] = req.attractorIndex;       // attractor_shader_idx
+          requestDataArray[i * 4 + 1] = req.count;                // num_to_spawn
+          requestDataArray[i * 4 + 2] = req.particleBufferOffset; // base_particle_offset
+          requestDataArray[i * 4 + 3] = 0;                        // unused padding
+      }
+      device.queue.writeBuffer(streamSpawnRequestBuffer, 0, requestDataArray.buffer, requestDataArray.byteOffset, requestDataArray.byteLength);
+      device.queue.writeBuffer(streamSpawnRequestCountBuf, 0, new Uint32Array([numActiveRequests]));
+      streamSpawnRequestsJS.splice(0, numActiveRequests); // Remove processed requests
+  } else {
+      device.queue.writeBuffer(streamSpawnRequestCountBuf, 0, new Uint32Array([0])); // No active requests
+  }
+
+  const enc=device.createCommandEncoder();
+  const computePass=enc.beginComputePass();
+  // Main particle compute pass
+  computePass.setPipeline(compPipe);computePass.setBindGroup(0,compBG);computePass.dispatchWorkgroups(Math.ceil(N/64));
+  
+  // Stream particle compute pass
+  computePass.setPipeline(streamComputePipeline);
+  computePass.setBindGroup(0, streamComputeBG);
+  computePass.dispatchWorkgroups(Math.ceil(MAX_STREAM_PARTICLES / 64));
+  computePass.end();
+
+  const tex=ctx.getCurrentTexture().createView();
+  const rpass=enc.beginRenderPass({colorAttachments:[{view:tex,clearValue:{r:0.03,g:0.03,b:0.05,a:1},loadOp:'clear',storeOp:'store'}]});
+  
+  // Draw main particles
+  rpass.setPipeline(renderPipe);rpass.setBindGroup(0,renBG);rpass.draw(N);
+  
+  // Draw stream particles
+  rpass.setPipeline(streamRenderPipeline);
+  rpass.setBindGroup(0, streamRenderBG); 
+  rpass.setBindGroup(1, streamRenderHueBG);
+  rpass.setVertexBuffer(0, streamParticleBuffer); 
+  rpass.draw(MAX_STREAM_PARTICLES); 
+  
+rpass.end();
+  device.queue.submit([enc.finish()]);
+  
+  frameCount++;
+  // ---------- Mic spike reactions ----------
+  if(micOn){
+    const bassDiff = bass - prevBass;
+    const highDiff = high - prevHigh;
+    // Bass thump or significant high-frequency spike: spawn attractor + impulse
+    if(bassDiff > 0.05 || highDiff > 0.08){ // Combined condition, adjusted highDiff threshold
+      addAttractor(true); // Spawn a transient attractor
+      impulseStrength = 1.3; // Make impulse stronger
+      impulseX = Math.random()*2 - 1;
+      impulseHue = Math.random();
+    }
+    // Treble spike: quick camera shift
+    if(highDiff > 0.1){ // This can still trigger independently for camera if desired
+      triggerCameraMovement();
+    }
+  }
+  // update previous energies with slight smoothing
+  prevBass = bass*0.5 + prevBass*0.5;
+  prevMid  = mid*0.5  + prevMid*0.5;
+  prevHigh = high*0.5 + prevHigh*0.5;
+  
+  // feedback accumulation
+  if(micOn){
+     const energyAvg=(bass+mid+high)/3;
+     feedbackEnergy=feedbackEnergy*0.97 + energyAvg*0.3;
+     // periodically create swirling attractors based on feedbackEnergy
+     if(frameCount%20===0 && Math.random()<feedbackEnergy){
+        addAttractor();
+     }
+     // Modulate viscosity and ripple with feedback
+     // if(!paramLocked.viscosity) viscosity = 0.99 - feedbackEnergy*0.04; // Viscosity is fixed
+     if(!paramLocked.rippleBase) rippleBase = 0.02 + feedbackEnergy*0.15;
+     rippleBase = Math.min(Math.max(rippleBase, 0.0), 0.15); // Clamped after feedback modulation
+  }
+  
+  // --- Audio-Driven Zoom Control ---
+  const zoomSpeed = 0.05; // Increased from 0.03
+  const bassEffect = bass * 2.0; // Increased from 0.8
+  const highEffect = high * 1.5; // Increased from 0.6
+
+  let desiredZoom = targetZoom; // Start with current target
+  if (bass > 0.08 && bass > high) { // Lowered threshold from 0.15, bass dominant
+      desiredZoom -= bassEffect * 0.7; // Increased effect, was 0.2
+  } else if (high > 0.07 && high > bass) { // Lowered threshold from 0.1, high dominant
+      desiredZoom += highEffect * 0.5; // Increased effect, was 0.15
+  }
+  // Smoothly move targetZoom towards the desiredZoom
+  targetZoom += (desiredZoom - targetZoom) * zoomSpeed;
+  targetZoom = Math.max(0.3, Math.min(3.0, targetZoom)); // Clamp targetZoom, widened range
+  // --- End of Audio-Driven Zoom Control ---
+
+  requestAnimationFrame(frame);
+}
+
+let frameCount = 0;
+let tendrilVertexCount = 0;
+// store previous audio energies for spike detection
+let prevBass=0, prevMid=0, prevHigh=0;
+let feedbackEnergy=0;
+
+// Tendril parameters (kept minimal to satisfy references in audio modulation logic)
+let sparkCount = 2;
+let linkDistance = 3.0;
+
+requestAnimationFrame(frame);
+
+/* ---------- RESIZE ---------- */
+function resize(){
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = canvas.clientWidth * dpr;
+  canvas.height = canvas.clientHeight * dpr;
+}
+window.addEventListener('resize',resize);resize();
+
+// Control Panel
+const controls=document.createElement('div');
+Object.assign(controls.style,{position:'fixed',top:'10px',left:'10px',padding:'8px 12px',background:'rgba(20,20,25,0.6)',color:'#ccc',fontSize:'12px',borderRadius:'4px',zIndex:'10'});
+document.body.appendChild(controls);
+
+function addSlider(label,min,max,step,init,callback){
+  const wrapper=document.createElement('div');
+  wrapper.style.marginBottom='4px';
+  const lab=document.createElement('label');lab.textContent=label;lab.style.display='block';
+  const input=document.createElement('input');input.type='range';input.min=min;input.max=max;input.step=step;input.value=init;
+  input.style.width='120px';
+  input.addEventListener('input',()=>callback(parseFloat(input.value)));
+  wrapper.appendChild(lab);wrapper.appendChild(input);controls.appendChild(wrapper);
+}
+
+// Parameters
+let flowBase=0.0002, flowScale=0.001, viscosity=0.96, rippleBase=0.03;
+// Track whether a parameter has been manually overridden by the user (locked)
+const paramLocked={flowBase:false,flowScale:false,viscosity:false,rippleBase:false};
+
+addSlider('Flow Strength',0,0.001,0.00005,flowBase,v=>{flowBase=v;paramLocked.flowBase=true;});
+addSlider('Flow Bass Scale',0,0.005,0.00025,flowScale,v=>{flowScale=v;paramLocked.flowScale=true;});
+addSlider('Ripple Amp',0,0.1,0.005,rippleBase,v=>{rippleBase=v;paramLocked.rippleBase=true;});
+// addSlider('Volume',0,1,0.05,0,v=>{if(audioOn)master.gain.value=v;});
+
+// Color picker helper
+function addColorPicker(label,init,cb){
+  const wrapper=document.createElement('div');wrapper.style.marginBottom='4px';
+  const lab=document.createElement('label');lab.textContent=label;lab.style.display='block';
+  const input=document.createElement('input');input.type='color';input.value=init;
+  input.addEventListener('input',()=>cb(input.value));
+  wrapper.appendChild(lab);wrapper.appendChild(input);controls.appendChild(wrapper);
+}
+
+// addColorPicker('Tendril Color','#4d99ff',hex=>{ // DELETED - Entire color picker call for tendrils
+// const r=parseInt(hex.substr(1,2),16)/255;
+// const g=parseInt(hex.substr(3,2),16)/255;
+// const b=parseInt(hex.substr(5,2),16)/255;
+// tendrilColor=[r,g,b];
+// device.queue.writeBuffer(tendrilColorBuf,0,new Float32Array(tendrilColor));
+// });
+
+// ---- Attractor management ----
+const DYN_ATTR_MAX = ATTR_COUNT - 1; 
+const newAttractorDuration = 360; 
+const transientStrengthHoldDuration = 300; 
+const attractors=[];
+
+function addAttractor(isTransient = false){
+  if(attractors.length>=DYN_ATTR_MAX){
+    attractors.shift(); // Remove oldest dynamic attractor
+    // Shift hue array entries 1..7 left by one
+    for(let h=1; h<ATTR_COUNT-1; h++){
+        attractorHues[h] = attractorHues[h+1];
+    }
+    attractorHues[ATTR_COUNT-1] = 0.0;
+  }
+  
+  let x, y, z;
+  if (densityGrid.highestDensityCell && Math.random() < 0.6 && !isTransient) {
+    const cell = densityGrid.highestDensityCell;
+    x = cell.x + (Math.random() * 2 - 1) * 1.0;
+    y = cell.y + (Math.random() * 2 - 1) * 1.0;
+    z = cell.z + (Math.random() * 2 - 1) * 1.0;
+  } else {
+    x = (Math.random() * 2 - 1) * 2;
+    y = (Math.random() * 2 - 1) * 2;
+    z = (Math.random() * 2 - 1) * 2;
+  }
+  
+  const physics = getCurrentPhysicsParams(); // Get current physics to potentially influence new attractors
+  let strength = physics.attractorStrength;
+  if (isTransient) {
+    strength = 1.5 + Math.random() * 0.7; 
+  }
+  
+  const newHue = Math.random();
+  const newAttractorObj = {
+    x, y, z, 
+    strength,
+    isNew: true, // Mark as new for initial effects
+    age: 0,             
+    wasTransient: isTransient 
+  };
+  attractors.push(newAttractorObj);
+
+  // Store hue for this attractor (shader index == attractors.length)
+  if(attractors.length < ATTR_COUNT){
+     attractorHues[attractors.length] = newHue;
+  }
+}
+
+function updateAttractors(baseStrength = 0.8){
+  for(let i=0;i<attractors.length;i++){
+    const att = attractors[i];
+    att.age++;
+
+    // Transition out of "isNew" state after a longer duration
+    if (att.isNew && att.age > newAttractorDuration) {
+        att.isNew = false;
+    }
+
+    // Decay attractors over time
+    let decayRate = 0.997; // Slower decay
+    // Optional: Make attractors that were transient decay a bit faster AFTER their initial phases
+    if (att.wasTransient && att.age > newAttractorDuration + 60) { // e.g., after newness + 1 second
+        decayRate = 0.995; // Still slower than original 0.990
+    }
+
+    // Hold strength for transient attractors for an initial period
+    if (att.wasTransient && att.age <= transientStrengthHoldDuration) {
+      // No strength decay during this hold period
+    } else {
+      att.strength *= decayRate;
+    }
+    
+    // Remove weak attractors
+    if(att.strength < 0.02){
+      attractors.splice(i,1);
+      // Shift hue array (index +1 since dynamic attractors start at 1)
+      for(let h=i+1; h<ATTR_COUNT-1; h++){
+          attractorHues[h] = attractorHues[h+1];
+      }
+      attractorHues[ATTR_COUNT-1] = 0.0;
+      i--;
+    }
+  }
+}
+
+// --- Generative FM chord events replacing noise clicks ---
+let impact = 0; // Keep impact as it's used in frame()
+
+// impulse state vars
+let impulseX=0,impulseStrength=0,impulseHue=0;
+
+</script>
+</body>
+</html> 
