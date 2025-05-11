@@ -285,8 +285,8 @@
                     currentScaleKey = availableScaleKeys[Math.floor(Math.random()*availableScaleKeys.length)];
                 }
 
-                // Auto-suspend the AudioContext after the tail ends (~3s)
-                setTimeout(()=>{ if (audioContext && audioContext.state === 'running') audioContext.suspend(); }, 3000);
+                // Removed automatic AudioContext suspension to maintain a continuous, evolving soundscape.
+                // If a fade-out is ever desired, we should gradually reduce gain values instead of suspending.
             }
 
             function initAudio() {
@@ -598,8 +598,9 @@
             // --- Uniforms ---
             // time, mouseX, mouseY, audioEnergy, isGlitching, aspectRatio,
             // bassEnergy, midEnergy, highEnergy, clickX, clickY, clickActive,
-            // camYaw, camPitch, dynAttrX, dynAttrY, dynAttrStrength
-            const uniformBufferSize = 17 * 4; // 17 floats
+            // camYaw, camPitch, camZoom, dynAttrX, dynAttrY, dynAttrStrength,
+            // letterId
+            const uniformBufferSize = 19 * 4; // 19 floats
             const uniformBuffer = device.createBuffer({
                 size: uniformBufferSize,
                 usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
@@ -631,9 +632,11 @@
                         clickActive: f32,
                         camYaw: f32,
                         camPitch: f32,
+                        camZoom: f32,
                         dynAttrX: f32,
                         dynAttrY: f32,
                         dynAttrStrength: f32,
+                        letterId: f32,
                     };
                     
                     // Simple pseudo-random generator
@@ -653,34 +656,49 @@
                         return length(p) - r;
                     }
 
-                    // Signed distance for block-style letter D centred at (-0.3,0)
+                    // Letter D (block style)
                     fn sdLetterD(p: vec2<f32>) -> f32 {
-                        let off = p - vec2<f32>(-0.3, 0.0);
-                        // vertical stem
-                        let stem = sdBox(off + vec2<f32>(0.15, 0.0), vec2<f32>(0.05, 0.4));
-                        // ring part
-                        let outer = sdCircle(vec2<f32>(off.x + 0.05, off.y), 0.25);
-                        let inner = sdCircle(vec2<f32>(off.x + 0.05, off.y), 0.18);
+                        let outer = sdCircle(p + vec2<f32>(0.05, 0.0), 0.25);
+                        let inner = sdCircle(p + vec2<f32>(0.05, 0.0), 0.18);
                         let ring = max(outer, -inner);
-                        return min(stem, ring);
+                        let stem = sdBox(p + vec2<f32>(0.2, 0.0), vec2<f32>(0.05, 0.4));
+                        return min(ring, stem);
                     }
 
-                    // Signed distance for block-style letter R centred at (0.3,0)
+                    // Letter R (block style)
                     fn sdLetterR(p: vec2<f32>) -> f32 {
-                        let off = p - vec2<f32>(0.3, 0.0);
-                        let stem = sdBox(off, vec2<f32>(0.05, 0.4));
-                        let outer = sdCircle(vec2<f32>(off.x - 0.05, off.y + 0.15), 0.22);
-                        let inner = sdCircle(vec2<f32>(off.x - 0.05, off.y + 0.15), 0.15);
+                        let stem = sdBox(p, vec2<f32>(0.05, 0.4));
+                        let outer = sdCircle(p + vec2<f32>(-0.05, 0.15), 0.22);
+                        let inner = sdCircle(p + vec2<f32>(-0.05, 0.15), 0.15);
                         let bowl = max(outer, -inner);
-                        // diagonal leg approximation
                         let k = vec2<f32>(0.3, -0.4);
-                        let proj = clamp(dot(off - vec2<f32>(0.05, -0.1), k) / dot(k, k), 0.0, 1.0);
-                        let leg = length((off - vec2<f32>(0.05, -0.1)) - k * proj) - 0.05;
+                        let proj = clamp(dot(p - vec2<f32>(0.05, -0.1), k) / dot(k, k), 0.0, 1.0);
+                        let leg = length((p - vec2<f32>(0.05, -0.1)) - k * proj) - 0.05;
                         return min(min(stem, bowl), leg);
                     }
 
-                    fn letterSDF(p: vec2<f32>) -> f32 {
-                        return min(abs(sdLetterD(p)), abs(sdLetterR(p))); // distance to edges of either letter
+                    // Letter O (ring)
+                    fn sdLetterO(p: vec2<f32>) -> f32 {
+                        let outer = sdCircle(p, 0.25);
+                        let inner = sdCircle(p, 0.18);
+                        return max(outer, -inner);
+                    }
+
+                    // Letter C (open ring)
+                    fn sdLetterC(p: vec2<f32>) -> f32 {
+                        let ring = sdLetterO(p);
+                        // Cut on the right side
+                        let cut = p.x - 0.05;
+                        return max(ring, cut);
+                    }
+
+                    fn letterSDF(p: vec2<f32>, id: f32) -> f32 {
+                        var d: f32;
+                        if (id < 0.5)      { d = abs(sdLetterD(p)); }
+                        else if (id < 1.5) { d = abs(sdLetterR(p)); }
+                        else if (id < 2.5) { d = abs(sdLetterO(p)); }
+                        else               { d = abs(sdLetterC(p)); }
+                        return d;
                     }
 
                     @compute @workgroup_size(64)
@@ -740,19 +758,20 @@
 
                         // --------- Letter edge attraction ---------
                         var letterEdgeForce = vec2<f32>(0.0, 0.0);
-                        let letterDist = letterSDF(p.pos);
-                        let edgeThreshold = 0.3; // region of influence
+                        let letterDist = letterSDF(p.pos, u.letterId);
+                        // De-emphasise the rigid letter outlines so the particle flow feels more organic
+                        let edgeThreshold = 0.15; // narrower region of influence (was 0.3)
                         if (letterDist < edgeThreshold) {
                             let eps = 0.003;
                             // Numerical gradient of sdf
                             let grad = vec2<f32>(
-                                letterSDF(p.pos + vec2<f32>(eps, 0.0)) - letterSDF(p.pos - vec2<f32>(eps, 0.0)),
-                                letterSDF(p.pos + vec2<f32>(0.0, eps)) - letterSDF(p.pos - vec2<f32>(0.0, eps))
+                                letterSDF(p.pos + vec2<f32>(eps, 0.0), u.letterId) - letterSDF(p.pos - vec2<f32>(eps, 0.0), u.letterId),
+                                letterSDF(p.pos + vec2<f32>(0.0, eps), u.letterId) - letterSDF(p.pos - vec2<f32>(0.0, eps), u.letterId)
                             );
                             let g = normalize(grad);
                             let strength = (edgeThreshold - letterDist) / edgeThreshold; // stronger nearer edge
-                            // Increase letter edge pull with overall audio energy to boost density responsively
-                            let dynamicStrength = (0.00015 + u.audioEnergy * 0.0006);
+                            // Much gentler pull towards the letter edges
+                            let dynamicStrength = (0.00005 + u.audioEnergy * 0.0002);
                             letterEdgeForce = -g * strength * dynamicStrength; // subtle pull to edge
                         }
 
@@ -887,7 +906,9 @@
                         p.pos += p.vel;
 
                         // Subtle respawn: particles that drift out are re-seeded near the main attractor
-                        if (abs(p.pos.x) > u.aspectRatio || abs(p.pos.y) > 1.0) {
+                        // Mark ~1.6% of particles as long-lived "giants" that will not be respawned
+                        let isGiant = (idx & 63u) == 0u;
+                        if (!isGiant && (abs(p.pos.x) > u.aspectRatio || abs(p.pos.y) > 1.0)) {
                             let offset = vec2<f32>((random_float()-0.5)*0.02, (random_float()-0.5)*0.02);
                             p.pos = blendedPointAttractor + offset;
                             p.vel = vec2<f32>(0.0,0.0);
@@ -923,9 +944,11 @@
                         clickActive: f32,
                         camYaw: f32,
                         camPitch: f32,
+                        camZoom: f32,
                         dynAttrX: f32,
                         dynAttrY: f32,
                         dynAttrStrength: f32,
+                        letterId: f32,
                     };
 
                     struct VertexOutput {
@@ -1022,7 +1045,12 @@
                         let speedSizeModifier = 0.5 + clamp(speed * 10.0, 0.0, 0.5); // Speed makes them slightly larger, not smaller
                         let randomFlicker = 1.0; // No flicker for now, could add based on instance_idx if desired: (0.7 + fract(sin(f32(instance_idx) * 12.9898) * 43758.5453) * 0.6);
                         let particleSize = (baseSizeMultiplier * speedSizeModifier * randomFlicker) * (0.5 + u.highEnergy * 1.5) ; // High energy can briefly make some larger
-                        out.size = max(0.0005, particleSize); // Ensure minimum size (effectively 1 pixel for small screens)
+
+                        // Identify long-lived giant particles (same bit pattern as compute shader)
+                        let isGiant = (instance_idx & 63u) == 0u;
+                        let giantFactor = select(1.0, 6.0, isGiant);
+                        let sizeScaled = max(0.0005, particleSize * giantFactor);
+                        out.size = sizeScaled;
                         
                         // Set texture coordinates for the fragment shader
                         out.texCoord = TEX_COORDS[vertex_idx];
@@ -1045,7 +1073,15 @@
                         let depthBase = hash; // 0-1
                         // Modulate depth gently with audio bands
                         let depthAudio = depthBase + u.bassEnergy*0.4 - u.highEnergy*0.2;
-                        let depth = clamp(depthAudio, 0.0, 1.0);
+                        var depth = depthAudio;
+
+                        // Adjust depth for giant particles
+                        if (isGiant) {
+                            // Push them far into (or out of) the scene for vast structures
+                            depth = depth * 15.0 + 5.0;
+                        } else {
+                            depth = clamp(depth, 0.0, 1.0);
+                        }
 
                         // Camera yaw & pitch vary unpredictably via nested sines
                         let yaw = u.camYaw;
@@ -1069,7 +1105,7 @@
                         var x = xz.x;
 
                         // Simple perspective
-                        let persp = 1.0 / (1.3 + z);
+                        let persp = 1.0 / (u.camZoom + z);
                         let screenX = x * persp;
                         let screenY = y * persp;
 
@@ -1078,7 +1114,7 @@
                         out.color.a *= clamp(persp*1.1, 0.3, 1.3);
 
                         // Position quad in screen space
-                        let quadPos = vec2<f32>(screenX, screenY) + VERTICES[vertex_idx] * particleSize * persp;
+                        let quadPos = vec2<f32>(screenX, screenY) + VERTICES[vertex_idx] * sizeScaled * persp;
                         out.position = vec4<f32>(quadPos.x / u.aspectRatio, quadPos.y, 0.0, 1.0);
                         
                         return out;
@@ -1214,27 +1250,56 @@
                 // Precompute aspect ratio for this frame (used in multiple places below)
                 const aspectRatio = canvas.width / canvas.height;
 
-                // ---- Camera smooth random shifts ----
-                if (currentTime - lastCamShiftTime > 4000 && camLerp >= 1.0) {
-                    targetCamYaw = (Math.random() - 0.5) * 1.2;  // wider horizontal sweep
-                    targetCamPitch = (Math.random() - 0.5) * 0.6; // subtle vertical tilt
+                // ---- Camera motion – always on the move ----
+                const timeSinceShift = currentTime - lastCamShiftTime;
+                if (timeSinceShift > 8000 || camLerp >= 1.0) {
+                    // Pick a *relative* offset so shifts feel continuous, not like teleporting
+                    targetCamYaw   += (Math.random() - 0.5) * Math.PI * 0.6;  // ±108°
+                    targetCamPitch += (Math.random() - 0.5) * Math.PI * 0.3;  // ±54°
+                    // Clamp pitch to avoid flipping over poles
+                    targetCamPitch = Math.max(-Math.PI/2 + 0.1, Math.min(Math.PI/2 - 0.1, targetCamPitch));
+
+                    targetCamZoom  = Math.max(0.4, Math.min(1.8, targetCamZoom + (Math.random() - 0.5) * 0.4));
+
                     camLerp = 0.0;
                     lastCamShiftTime = currentTime;
+                    triggerPerspectiveAudioModulation();
                 }
                 if (camLerp < 1.0) {
-                    camLerp += 0.01;
-                    camYaw += (targetCamYaw - camYaw) * 0.02;
-                    camPitch += (targetCamPitch - camPitch) * 0.02;
+                    // Non-linear easing (easeOutQuad)
+                    const ease = camLerp*camLerp;
+                    camYaw += (targetCamYaw - camYaw) * 0.02 * (0.5 + ease);
+                    camPitch += (targetCamPitch - camPitch) * 0.02 * (0.5 + ease);
+                    camZoom += (targetCamZoom - camZoom) * 0.02 * (0.5 + ease);
+                    // Progress interpolation so camera eventually reaches its target smoothly
+                    camLerp = Math.min(1.0, camLerp + 0.005);
                 }
 
-                // ---- Dynamic attractor (strange attractor) ----
-                if (currentTime - dynAttr.lastChange > 3000) {
-                    dynAttr.x = (Math.random() * 2 - 1) * aspectRatio * 0.6;
-                    dynAttr.y = (Math.random() * 2 - 1) * 0.6;
-                    dynAttr.strength = 0.3 + Math.random() * 0.7;
-                    dynAttr.lastChange = currentTime;
+                // Baseline micro-drift so camera never sits perfectly still
+                camYaw  += (Math.random()-0.5) * 0.0004;
+                camPitch+= (Math.random()-0.5) * 0.00025;
+
+                // ---- FM-driven dynamic attractor  ----
+                if (audioContext) {
+                    // Use slowly varying sine/cosine of oscillator frequencies to get fluid, musical orbits.
+                    const t = audioContext.currentTime;
+                    const f1 = oscillator1 ? oscillator1.frequency.value : 220;
+                    const f2 = oscillator2 ? oscillator2.frequency.value : 220;
+                    // The 0.001 scalar makes the movement comfortably slow.
+                    dynAttr.x = Math.sin(t * f1 * 0.001) * aspectRatio * 0.5;
+                    dynAttr.y = Math.cos(t * f2 * 0.001) * 0.5;
+                    // Strength responds to overall energy so busy passages tug particles harder
+                    dynAttr.strength = 0.2 + audioEnergy * 0.8;
                 } else {
-                    dynAttr.strength *= 0.995; // Decay over time for smoothness
+                    // Fallback: slow random wander when audio inactive
+                    if (currentTime - dynAttr.lastChange > 4000) {
+                        dynAttr.x = (Math.random() * 2 - 1) * aspectRatio * 0.5;
+                        dynAttr.y = (Math.random() * 2 - 1) * 0.5;
+                        dynAttr.strength = 0.2 + Math.random() * 0.4;
+                        dynAttr.lastChange = currentTime;
+                    } else {
+                        dynAttr.strength *= 0.995;
+                    }
                 }
 
                 // Estimate particle activity and color for audio feedback
@@ -1287,7 +1352,7 @@
                     const targetFilterFreq = 200 + (mousePos.y * 500) + (bassEnergy * 800); // Reduced from 2000
                     filterNode.frequency.linearRampToValueAtTime(targetFilterFreq, audioContext.currentTime + 0.2);
                     
-                    const targetGain = 0.0; // remain silent between clicks
+                    const targetGain = 0.02 + bassEnergy*0.05; // continuous quiet drone, modulated by bass
                     gainNode.gain.linearRampToValueAtTime(targetGain, audioContext.currentTime + 0.1);
 
                     const targetPan = (mousePos.x - 0.5) * 0.1; // Reduced from 0.4
@@ -1371,9 +1436,11 @@
                     clickState.active ? 1.0 : 0.0,
                     camYaw,
                     camPitch,
+                    camZoom,
                     dynAttr.x,
                     dynAttr.y,
-                    dynAttr.strength
+                    dynAttr.strength,
+                    currentLetterId
                 ]);
                 device.queue.writeBuffer(uniformBuffer, 0, uniformData);
                 
@@ -1440,13 +1507,118 @@
             canvas.height = Math.max(1, Math.min(canvas.clientHeight, device.limits.maxTextureDimension2D));
 
             // Declare camera variables near top of main()
-            let camYaw = 0.0, camPitch = 0.0;
-            let targetCamYaw = 0.0, targetCamPitch = 0.0;
+            let camYaw = 0.0, camPitch = 0.0, camZoom = 1.3;
+            let targetCamYaw = 0.0, targetCamPitch = 0.0, targetCamZoom = 1.3;
             let camLerp = 1.0; // 1 = reached target
             let lastCamShiftTime = 0;
 
+            // --- Dynamic block letter selection ---
+            let currentLetterId = 0; // 0=D,1=R,2=O,3=C
+            function chooseNewLetter() {
+                currentLetterId = Math.floor(Math.random()*4);
+            }
+            // Change letter every 10-15 seconds
+            setInterval(chooseNewLetter, 10000 + Math.random()*5000);
+
             // Dynamic attractor
             let dynAttr = {x:0.0, y:0.0, strength:0.0, lastChange:0};
+
+            // === New: Audio modulation tied to perspective shifts ===
+            function triggerPerspectiveAudioModulation() {
+                if (!audioContext) return;
+                if (audioContext.state === 'suspended') audioContext.resume();
+                const now = audioContext.currentTime;
+
+                // Filter sweep for dramatic effect
+                const startFreq = 200 + Math.random() * 800;
+                filterNode.frequency.setValueAtTime(startFreq, now);
+                filterNode.frequency.exponentialRampToValueAtTime(startFreq * 4, now + 0.5);
+                filterNode.frequency.exponentialRampToValueAtTime(startFreq, now + 3.0);
+
+                // Subtle delay variation
+                delayNode.delayTime.setValueAtTime(0.15 + Math.random() * 0.3, now);
+
+                // Occasionally fire off some poly-bleeps
+                if (Math.random() < 0.4) {
+                    triggerPolyBleeps();
+                }
+            }
+
+            // === New: Polyphonic bleep / bloop voices ===
+            function triggerPolyBleeps() {
+                if (!audioContext) return;
+                if (audioContext.state === 'suspended') audioContext.resume();
+                const voiceCount = 2 + Math.floor(Math.random() * 3); // 2–4 voices
+                const now = audioContext.currentTime;
+
+                for (let i = 0; i < voiceCount; i++) {
+                    const osc = audioContext.createOscillator();
+                    osc.type = 'square';
+                    // Random note within current scale
+                    const freq = getRandomNoteFromCurrentScale(0) * (0.5 + Math.random() * 2.0);
+                    osc.frequency.setValueAtTime(freq, now);
+
+                    const amp = audioContext.createGain();
+                    amp.gain.setValueAtTime(0.0, now);
+                    amp.gain.linearRampToValueAtTime(0.25, now + 0.03);
+                    amp.gain.exponentialRampToValueAtTime(0.0001, now + 2.0);
+
+                    // Route through delay (for ping-pong style echoes) and then compressor
+                    amp.connect(delayNode);
+                    delayNode.connect(compressorNode);
+                    amp.connect(compressorNode);
+
+                    osc.connect(amp);
+                    osc.start(now);
+                    osc.stop(now + 2.2);
+                }
+            }
+
+            // === Random Burst Scheduler ===
+            function triggerBurst() {
+                // Rapid sequence of audio clicks
+                for (let i = 0; i < 4 + Math.floor(Math.random()*4); i++) {
+                    setTimeout(()=>{ triggerAudioClickEvent(); }, i*90);
+                }
+                // Short noise burst
+                if (audioContext) {
+                    const now = audioContext.currentTime;
+                    const duration = 0.2;
+                    const noiseBuffer = audioContext.createBuffer(1, audioContext.sampleRate * duration, audioContext.sampleRate);
+                    const data = noiseBuffer.getChannelData(0);
+                    for (let i=0;i<data.length;i++) data[i] = (Math.random()*2-1)*0.3;
+                    const noiseSrc = audioContext.createBufferSource();
+                    noiseSrc.buffer = noiseBuffer;
+                    const noiseGain = audioContext.createGain();
+                    noiseGain.gain.setValueAtTime(0.0, now);
+                    noiseGain.gain.linearRampToValueAtTime(0.4, now + 0.01);
+                    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+                    // Soft lowpass filter to tame highs
+                    const ngLp = audioContext.createBiquadFilter();
+                    ngLp.type = 'lowpass';
+                    ngLp.frequency.setValueAtTime(2000, now);
+                    noiseSrc.connect(ngLp);
+                    ngLp.connect(noiseGain);
+                    noiseSrc.start(now);
+                    noiseSrc.stop(now + duration);
+                }
+                // Instead of snapping, set new distant targets; camera will smoothly ease due to camLerp
+                targetCamYaw = (Math.random()*Math.PI*2) - Math.PI;
+                targetCamPitch = (Math.random()-0.5)*Math.PI;
+                targetCamZoom = 0.4 + Math.random()*1.5;
+                camLerp = 0.0; // begin easing toward new target
+                lastCamShiftTime = performance.now();
+            }
+
+            function scheduleBurst() {
+                const next = 5000 + Math.random()*7000; // 5–12s
+                setTimeout(()=>{
+                    triggerBurst();
+                    scheduleBurst();
+                }, next);
+            }
+
+            scheduleBurst();
 
             requestAnimationFrame(frame);
         }
