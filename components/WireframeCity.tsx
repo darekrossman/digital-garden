@@ -35,7 +35,7 @@ const WireframeCity: React.FC = () => {
 
     // Create wireframe material - transparent with only lines visible
     const wireframeMaterial = new THREE.LineBasicMaterial({
-      color: 0x00ffff, // Cyan color for the wireframe
+      color: 0x000000, // Black color for the wireframe
       transparent: true,
       opacity: 0.15, // Much more subtle opacity for background use
     })
@@ -68,7 +68,7 @@ const WireframeCity: React.FC = () => {
     gridGeometry.setAttribute('position', new THREE.Float32BufferAttribute(gridVertices, 3))
 
     const gridMaterial = new THREE.LineBasicMaterial({
-      color: 0x00ffff,
+      color: 0x000000,
       transparent: true,
       opacity: 0.1,
     })
@@ -84,7 +84,7 @@ const WireframeCity: React.FC = () => {
       const building = new THREE.LineSegments(
         edges,
         new THREE.LineBasicMaterial({
-          color: 0x00ffff,
+          color: 0x000000,
           transparent: true,
           opacity: 0.2, // More subtle for background use
         }),
@@ -123,8 +123,7 @@ const WireframeCity: React.FC = () => {
     const animate = () => {
       requestAnimationFrame(animate)
 
-      // Slowly rotate the entire city
-      cityGroup.rotation.y += 0.0005
+      // No rotation - removed auto-orbiting
 
       renderer.render(scene, camera)
     }
