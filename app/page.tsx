@@ -1,5 +1,6 @@
 'use client'
 
+import WireframeCity from '@/components/WireframeCity'
 import { LLMCanvas } from '@/components/llm-canvas'
 import Scrambler from '@/components/scrambler'
 import { getRandomInt } from '@/lib/helpers'
@@ -161,8 +162,20 @@ export default function Home() {
 
   return (
     <Box h="100dvh" position="relative" display="flex" flexDirection="column">
-      {/* Positioned blocks */}
-      <Box position="relative" h="100%" overflow="hidden">
+      {/* Wireframe city background */}
+      <Box
+        position="absolute"
+        top="0"
+        left="0"
+        right="0"
+        bottom="0"
+        zIndex="0"
+        pointerEvents="none" // Let mouse events pass through to content below
+      >
+        <WireframeCity />
+      </Box>
+
+      <Box position="relative" h="100%" overflow="hidden" zIndex="1">
         {blockStyles.length > 0 && Array.from({ length: blockCount }).map((_, i) => renderBlock(i))}
 
         {/* Center intro - fixed position */}
@@ -280,13 +293,7 @@ function LLMBlock({
   ]
 
   const buildPrompt = (base: string) => {
-    const adjective =
-      adjectives[
-        getRandomInt(0, adjectives.length - 1, {
-          distribution: 'gaussian', // Use gaussian to favor middle items in the list
-          factor: 4,
-        })
-      ]
+    const adjective = adjectives[getRandomInt(0, adjectives.length - 1)]
 
     // Generate a random alphanumeric string for the nonce
     // let nonce = ''
