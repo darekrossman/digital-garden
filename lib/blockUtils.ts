@@ -1,17 +1,20 @@
-import { BlockStyle, ControlValues, WireframeStyle } from '@/types'
+import { BlockStyle, ControlValues } from '@/types'
+import { DEFAULT_CONFIG } from './config'
 import { getRandomInt } from './helpers'
+import { generateRandomWireframeStyle } from './wireframeUtils'
 
 /**
  * Generates a random style for a block based on control values
  */
-export function generateRandomBlockStyle(controls: Partial<ControlValues>): BlockStyle {
-  // Extract control values with defaults for robustness
-  const blockPosRange = controls.blockPositionRange || { min: -10, max: 75 }
-  const blockScale = controls.blockScaleRange || { min: 0.5, max: 2.8 }
-  const blockDistFactor = controls.blockDistributionFactor ?? 4
-  const enableRot = controls.enableRotation ?? true
-  const blockWidth = controls.blockWidthRange || { min: 20, max: 40 }
-  const pixelFontProb = controls.pixelFontProbability ?? 0.5
+export function generateRandomBlockStyle(controls: Partial<ControlValues> = {}): BlockStyle {
+  // Extract control values with defaults from central config
+  const blockPosRange = controls.blockPositionRange || DEFAULT_CONFIG.blocks.positionRange
+  const blockScale = controls.blockScaleRange || DEFAULT_CONFIG.blocks.scaleRange
+  const blockDistFactor =
+    controls.blockDistributionFactor ?? DEFAULT_CONFIG.blocks.distributionFactor
+  const enableRot = controls.enableRotation ?? DEFAULT_CONFIG.blocks.enableRotation
+  const blockWidth = controls.blockWidthRange || DEFAULT_CONFIG.blocks.widthRange
+  const pixelFontProb = controls.pixelFontProbability ?? DEFAULT_CONFIG.blocks.pixelFontProbability
 
   return {
     top: `${getRandomInt(blockPosRange.min, blockPosRange.max)}%`,
@@ -28,48 +31,6 @@ export function generateRandomBlockStyle(controls: Partial<ControlValues>): Bloc
     width: getRandomInt(blockWidth.min, blockWidth.max),
     bg: 'transparent',
     fontFamily: Math.random() < pixelFontProb ? 'pixel' : 'sans-serif',
-  }
-}
-
-/**
- * Generates a random wireframe style
- */
-export function generateRandomWireframeStyle(): WireframeStyle {
-  const top = `${getRandomInt(-15, 75)}%`
-  const left = `${getRandomInt(-5, 75)}%`
-  const size = `${getRandomInt(50, 250)}px`
-  const type = Math.random() < 0.5 ? 'cube' : Math.random() < 0.5 ? 'sphere' : null
-  const scale = getRandomInt(80, 150) / 100
-  const segments = 12
-
-  // Colors for wireframes
-  const colors = [
-    0xff0000, // Red
-    0x00ff00, // Green
-    0x0000ff, // Blue
-    0xffff00, // Yellow
-    0xff00ff, // Magenta
-    0x00ffff, // Cyan
-    0xff8000, // Orange
-    0x8000ff, // Purple
-    0x0080ff, // Light Blue
-    0x8fff00, // Lime
-    0xff0080, // Hot Pink
-    0x000000, // Black
-    0xffffff, // White
-  ]
-
-  const wireframeColor = colors[getRandomInt(0, colors.length - 1)]
-
-  return {
-    top,
-    left,
-    width: size,
-    height: size,
-    scale,
-    type,
-    segments,
-    wireframeColor,
   }
 }
 
@@ -104,8 +65,8 @@ export function getBlockTransform(style: BlockStyle): string {
  * Creates an array of random block styles
  */
 export function generateInitialBlockStyles(
-  count: number,
-  generator: () => BlockStyle,
+  count: number = DEFAULT_CONFIG.blocks.count,
+  generator: () => BlockStyle = () => generateRandomBlockStyle(),
 ): BlockStyle[] {
   const styles: BlockStyle[] = []
   for (let i = 0; i < count; i++) {

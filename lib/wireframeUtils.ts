@@ -1,24 +1,6 @@
 import { WireframeStyle } from '@/types'
 import { getRandomInt } from './helpers'
-
-/**
- * Predefined colors for wireframe objects
- */
-export const wireframeColors = [
-  0xff0000, // Red
-  0x00ff00, // Green
-  0x0000ff, // Blue
-  0xffff00, // Yellow
-  0xff00ff, // Magenta
-  0x00ffff, // Cyan
-  0xff8000, // Orange
-  0x8000ff, // Purple
-  0x0080ff, // Light Blue
-  0x8fff00, // Lime
-  0xff0080, // Hot Pink
-  0x000000, // Black (occasionally)
-  0xffffff, // White (occasionally)
-]
+import { DEFAULT_CONFIG, WIREFRAME_COLORS } from './config'
 
 /**
  * Generates a random wireframe style with configurable properties
@@ -33,15 +15,15 @@ export function generateRandomWireframeStyle(
     colorOptions?: number[]
   } = {}
 ): WireframeStyle {
-  // Use provided options or defaults
-  const topRange = options.topRange || [-15, 75]
-  const leftRange = options.leftRange || [-5, 75]
-  const sizeRange = options.sizeRange || [50, 250]
-  const scaleRange = options.scaleRange || [80, 150]
-  const colorOptions = options.colorOptions || wireframeColors
+  // Use provided options or defaults from config
+  const topRange = options.topRange || DEFAULT_CONFIG.wireframe.positionRanges.top
+  const leftRange = options.leftRange || DEFAULT_CONFIG.wireframe.positionRanges.left
+  const sizeRange = options.sizeRange || DEFAULT_CONFIG.wireframe.positionRanges.size
+  const scaleRange = options.scaleRange || DEFAULT_CONFIG.wireframe.positionRanges.scale
+  const colorOptions = options.colorOptions || DEFAULT_CONFIG.wireframe.colors
   
-  // Type selection based on weights or default 33/33/33 distribution
-  const typeWeights = options.typeWeights || { cube: 0.33, sphere: 0.33, none: 0.34 }
+  // Type selection based on weights or default distribution from config
+  const typeWeights = options.typeWeights || DEFAULT_CONFIG.wireframe.typeWeights
   
   // Generate random position
   const top = `${getRandomInt(topRange[0], topRange[1])}%`
@@ -65,8 +47,8 @@ export function generateRandomWireframeStyle(
   // Generate random scale
   const scale = getRandomInt(scaleRange[0], scaleRange[1]) / 100
   
-  // Default segments (could be made configurable in the future)
-  const segments = 12
+  // Use segments from central config
+  const segments = DEFAULT_CONFIG.wireframe.segments
   
   // Pick a random color from the available options
   const wireframeColor = colorOptions[getRandomInt(0, colorOptions.length - 1)]
@@ -87,7 +69,9 @@ export function generateRandomWireframeStyle(
  * Converts a hex color string to a number
  */
 export function hexToNumber(hexColor: string): number {
-  return parseInt(hexColor.replace('#', ''), 16)
+  // Handle both formats: "#ffffff" and "ffffff"
+  const hex = hexColor.startsWith('#') ? hexColor.substring(1) : hexColor
+  return parseInt(hex, 16)
 }
 
 /**

@@ -4,11 +4,13 @@ import { ControlValues } from '@/types'
 import { Leva } from 'leva'
 import { usePageControls } from '@/lib/hooks/usePageControls'
 import { useEffect, useState } from 'react'
+import { DEFAULT_CONFIG } from '@/lib/config'
+import { hexToNumber } from '@/lib/wireframeUtils'
 
 interface ControlPanelProps {
-  blockCount: number
+  blockCount?: number
   initialGlitchIntensity?: number
-  initialWireframeColor?: number
+  initialWireframeColor?: number | string
   initialWireframeType?: 'cube' | 'sphere' | null
   initialWireframeSegments?: number
   onGlitchIntensityChange?: (value: number) => void
@@ -24,11 +26,11 @@ interface ControlPanelProps {
  * Control panel component using Leva for UI settings
  */
 export default function ControlPanel({
-  blockCount,
-  initialGlitchIntensity = 0.5,
-  initialWireframeColor = 0x000000,
-  initialWireframeType = null,
-  initialWireframeSegments = 12,
+  blockCount = DEFAULT_CONFIG.blocks.count,
+  initialGlitchIntensity = DEFAULT_CONFIG.wireframe.glitchIntensity,
+  initialWireframeColor = DEFAULT_CONFIG.wireframe.wireframeColor,
+  initialWireframeType = DEFAULT_CONFIG.wireframe.type,
+  initialWireframeSegments = DEFAULT_CONFIG.wireframe.segments,
   onGlitchIntensityChange,
   onWireframeTypeChange,
   onWireframeSegmentsChange,
@@ -37,22 +39,29 @@ export default function ControlPanel({
   onRandomizeWireframe,
   onRegeneratePositions,
 }: ControlPanelProps) {
-  // Track previous values to detect changes
-  const [prevGlitchIntensity, setPrevGlitchIntensity] = useState<number>(initialGlitchIntensity || 0.5)
-  const [prevWireframeType, setPrevWireframeType] = useState<'cube' | 'sphere' | null>(initialWireframeType)
-  const [prevWireframeSegments, setPrevWireframeSegments] = useState<number>(initialWireframeSegments || 12)
-  const [prevWireframeColor, setPrevWireframeColor] = useState<number>(initialWireframeColor || 0)
+  // Convert initialWireframeColor to number if it's a string
+  const normalizedInitialColor = typeof initialWireframeColor === 'string' 
+    ? hexToNumber(initialWireframeColor)
+    : initialWireframeColor
 
-  // Get control values from the custom hook
+  // Track previous values to detect changes
+  const [prevGlitchIntensity, setPrevGlitchIntensity] = useState<number>(initialGlitchIntensity)
+  const [prevWireframeType, setPrevWireframeType] = useState<'cube' | 'sphere' | null>(initialWireframeType)
+  const [prevWireframeSegments, setPrevWireframeSegments] = useState<number>(initialWireframeSegments)
+  const [prevWireframeColor, setPrevWireframeColor] = useState<number>(normalizedInitialColor)
+
+  // Get control values from the custom hook with initial values from props
   const controls = usePageControls({
-    blockCount,
-    initialGlitchIntensity,
-    initialWireframeColor,
-    initialWireframeType,
-    initialWireframeSegments,
     onRegenerateAll,
     onRandomizeWireframe,
     onRegeneratePositions,
+    initialValues: {
+      glitchIntensity: initialGlitchIntensity,
+      wireframeColor: initialWireframeColor,
+      wireframeType: initialWireframeType === null ? 'none' : initialWireframeType,
+      wireframeSegments: initialWireframeSegments,
+      blockCount
+    }
   })
 
   // Use effect to detect and handle control value changes

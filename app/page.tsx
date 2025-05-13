@@ -10,6 +10,7 @@ import {
   generateRandomBlockStyle,
   regenerateBlocks,
 } from '@/lib/blockUtils'
+import { DEFAULT_CONFIG, getDefaultWireframeStyle } from '@/lib/config'
 import { defaultIntro } from '@/lib/constants'
 import { createClearableInterval } from '@/lib/helpers'
 import { usePageControls } from '@/lib/hooks/usePageControls'
@@ -23,8 +24,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
  * Main page component
  */
 export default function Home() {
-  // Fixed number of blocks to position around the viewport
-  const blockCount = 9
+  // Use centralized config for block count
+  const blockCount = DEFAULT_CONFIG.blocks.count
 
   // Track multiple blocks to regenerate with a Set of indices
   const [blocksToRegenerate, setBlocksToRegenerate] = useState(new Set<number>())
@@ -35,20 +36,20 @@ export default function Home() {
   // Interval reference for regeneration timing
   const intervalRef = useRef<ReturnType<typeof createClearableInterval> | null>(null)
 
-  // State for wireframe positioning and properties
+  // State for wireframe positioning and properties - use default from config
   const [wireframeStyle, setWireframeStyle] = useState<WireframeStyle>({
     top: '0',
     left: '0',
     width: '50px',
     height: '50px',
     scale: 1,
-    type: null,
-    segments: 12,
-    wireframeColor: 0x000000,
+    type: DEFAULT_CONFIG.wireframe.type,
+    segments: DEFAULT_CONFIG.wireframe.segments,
+    wireframeColor: DEFAULT_CONFIG.wireframe.wireframeColor,
   })
 
-  // State for glitch intensity
-  const [glitchIntensity, setGlitchIntensity] = useState(0.5)
+  // State for glitch intensity - use default from config
+  const [glitchIntensity, setGlitchIntensity] = useState(DEFAULT_CONFIG.wireframe.glitchIntensity)
 
   // Handle manual regeneration of all blocks
   const regenerateAllBlocks = useCallback(() => {
@@ -94,8 +95,14 @@ export default function Home() {
   }, [])
 
   // Handler for wireframe color changes
-  const handleWireframeColorChange = useCallback((color: number) => {
-    setWireframeStyle((current) => ({ ...current, wireframeColor: color }))
+  const handleWireframeColorChange = useCallback((color: number | string) => {
+    // Normalize the color value to ensure it's a number
+    const normalizedColor = typeof color === 'string' ? parseInt(color.replace('#', ''), 16) : color
+
+    setWireframeStyle((current) => ({
+      ...current,
+      wireframeColor: normalizedColor,
+    }))
   }, [])
 
   // Handler for wireframe segments changes
@@ -105,14 +112,16 @@ export default function Home() {
 
   // Get control panel values using our custom hook
   const controls = usePageControls({
-    blockCount,
-    initialGlitchIntensity: glitchIntensity,
-    initialWireframeColor: wireframeStyle.wireframeColor,
-    initialWireframeType: wireframeStyle.type,
-    initialWireframeSegments: wireframeStyle.segments || 12,
     onRegenerateAll: regenerateAllBlocks,
     onRandomizeWireframe: () => setWireframeStyle(generateRandomWireframeStyle()),
     onRegeneratePositions: regenerateAllPositions,
+    // Pass current state as initial values to maintain synchronization
+    initialValues: {
+      glitchIntensity,
+      wireframeType: wireframeStyle.type === null ? 'none' : wireframeStyle.type,
+      wireframeSegments: wireframeStyle.segments,
+      wireframeColor: wireframeStyle.wireframeColor,
+    },
   })
 
   // Generate random positions and scales for blocks on mount
@@ -136,6 +145,33 @@ export default function Home() {
     controls.blockDistributionFactor,
     controls.enableRotation,
     controls.pixelFontProbability,
+  ])
+
+  // Sync state with control values
+  useEffect(() => {
+    setGlitchIntensity(controls.glitchIntensity)
+    setWireframeStyle((current) => {
+      // Get the wireframe type, converting 'none' to null
+      const type = controls.wireframeType === 'none' ? null : controls.wireframeType
+
+      // Handle color conversion if needed
+      const color =
+        typeof controls.wireframeColor === 'string' && controls.wireframeColor.startsWith('#')
+          ? parseInt(controls.wireframeColor.replace('#', ''), 16)
+          : controls.wireframeColor
+
+      return {
+        ...current,
+        type,
+        segments: controls.wireframeSegments,
+        wireframeColor: color as number,
+      }
+    })
+  }, [
+    controls.glitchIntensity,
+    controls.wireframeType,
+    controls.wireframeSegments,
+    controls.wireframeColor,
   ])
 
   // Handle pause state changes
@@ -200,6 +236,7 @@ export default function Home() {
         onRegenerationStart={() => onBlockRegenerationStart(i)}
         content={JSON.stringify(defaultIntro)}
         style={{
+          maxHeight: '100vh',
           backgroundColor: style.bg,
           position: 'absolute',
           top: style.top,
@@ -218,6 +255,7 @@ export default function Home() {
 
   return (
     <>
+      {/* Use the control panel component normally - all state is centralized */}
       <ControlPanel
         blockCount={blockCount}
         initialGlitchIntensity={controls.glitchIntensity}

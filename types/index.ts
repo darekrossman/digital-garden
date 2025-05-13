@@ -29,7 +29,7 @@ export type WireframeStyle = {
   scale: number
   type: 'cube' | 'sphere' | null
   segments?: number
-  wireframeColor: number
+  wireframeColor: number | string
 }
 
 /**
@@ -41,14 +41,14 @@ export interface ControlValues {
   isPaused: boolean
   regenerateInterval: number
   regenerateAll?: () => void
-  
+
   // Wireframe controls
   glitchIntensity: number
   wireframeType: 'none' | 'cube' | 'sphere'
   wireframeSegments: number
-  wireframeColor: string
+  wireframeColor: string | number
   randomizeWireframe?: () => void
-  
+
   // Block controls
   blockCount: number
   glitchProbability: number
