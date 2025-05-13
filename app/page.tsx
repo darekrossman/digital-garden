@@ -7,6 +7,8 @@ import Scrambler from '@/components/scrambler'
 import { getRandomInt } from '@/lib/helpers'
 import { Box, Center, GridItemProps, Stack, styled } from '@/styled-system/jsx'
 import { Token, token } from '@/styled-system/tokens'
+import { button, folder, useControls } from 'leva'
+import { Leva } from 'leva'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 // Define a type for block positioning and scaling
@@ -50,8 +52,6 @@ export default function Home() {
   const [blocksToRegenerate, setBlocksToRegenerate] = useState(new Set<number>())
   // Store position and scale for each block
   const [blockStyles, setBlockStyles] = useState<BlockStyle[]>([])
-  // Add states for pausing regeneration
-  const [isPaused, setIsPaused] = useState(false)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
 
   // State for wireframe positioning and properties
@@ -69,27 +69,161 @@ export default function Home() {
   // Add state for glitch intensity
   const [glitchIntensity, setGlitchIntensity] = useState(0.5)
 
-  // Function to generate a random style for a block
-  const generateRandomStyle = (): BlockStyle => {
+  // Setup Leva control panel first, as generateRandomStyle depends on it
+  const controls = useControls({
+    animation: folder({
+      isPaused: {
+        value: false,
+        label: 'Pause Animation',
+      },
+      regenerateInterval: {
+        value: 10000,
+        min: 1000,
+        max: 30000,
+        step: 500,
+        label: 'Regen Interval (ms)',
+      },
+      regenerateAll: button(() => regenerateAllBlocks()),
+    }),
+    wireframe: folder({
+      glitchIntensity: {
+        value: glitchIntensity,
+        min: 0,
+        max: 1,
+        step: 0.1,
+        label: 'Glitch Intensity',
+        onChange: (value) => setGlitchIntensity(value),
+      },
+      wireframeType: {
+        value: wireframeStyle.type === null ? 'none' : wireframeStyle.type,
+        options: ['none', 'cube', 'sphere'],
+        label: 'Wireframe Type',
+        onChange: (value) => {
+          if (value === 'none') {
+            setWireframeStyle({ ...wireframeStyle, type: null })
+          } else {
+            setWireframeStyle({ ...wireframeStyle, type: value as 'cube' | 'sphere' })
+          }
+        },
+      },
+      wireframeSegments: {
+        value: wireframeStyle.segments || 12,
+        min: 4,
+        max: 32,
+        step: 1,
+        label: 'Segments',
+        onChange: (value) => setWireframeStyle({ ...wireframeStyle, segments: value }),
+      },
+      wireframeColor: {
+        value: '#' + wireframeStyle.wireframeColor.toString(16).padStart(6, '0'),
+        label: 'Color',
+        onChange: (value) => {
+          // Convert hex string to number
+          const hexValue = parseInt(value.replace('#', ''), 16)
+          setWireframeStyle({ ...wireframeStyle, wireframeColor: hexValue })
+        },
+      },
+      randomizeWireframe: button(() => {
+        setWireframeStyle(generateRandomWireframeStyle())
+      }),
+    }),
+    blocks: folder({
+      blockCount: {
+        value: blockCount,
+        min: 1,
+        max: 20,
+        step: 1,
+        disabled: true,
+        label: 'Block Count',
+      },
+      glitchProbability: {
+        value: 0.05,
+        min: 0,
+        max: 0.5,
+        step: 0.01,
+        label: 'Glitch Probability',
+      },
+      regenerateCount: {
+        value: 2,
+        min: 1,
+        max: 5,
+        step: 1,
+        label: 'Blocks to Regenerate',
+      },
+      blockPositionRange: {
+        value: { min: -10, max: 75 },
+        label: 'Position Range (%)',
+      },
+      blockScaleRange: {
+        value: { min: 0.5, max: 2.8 },
+        label: 'Scale Range',
+      },
+      blockWidthRange: {
+        value: { min: 20, max: 40 },
+        label: 'Width Range (vw)',
+      },
+      blockDistributionFactor: {
+        value: 4,
+        min: 1,
+        max: 10,
+        step: 0.5,
+        label: 'Distribution Factor',
+      },
+      enableRotation: {
+        value: false,
+        label: 'Enable 3D Rotation',
+      },
+      pixelFontProbability: {
+        value: 0.1,
+        min: 0,
+        max: 1,
+        step: 0.05,
+        label: 'Pixel Font Probability',
+      },
+      regenerateAllPositions: button(() => {
+        // Regenerate positions for all blocks but don't trigger content regeneration
+        setBlockStyles((current) => {
+          return current.map(() => generateRandomStyle())
+        })
+      }),
+    }),
+  })
+
+  // Callback for generating random block styles, memoized with controls as a dependency
+  const generateRandomStyle = useCallback((): BlockStyle => {
+    // Direct access to controls, assuming Leva provides them after init.
+    // Provide defaults for robustness during initial render or if a control is unexpectedly missing.
+    const blockPosRange = controls.blockPositionRange || { min: -10, max: 75 }
+    const blockScale = controls.blockScaleRange || { min: 0.5, max: 2.8 }
+    const blockDistFactor = controls.blockDistributionFactor ?? 4 // Use ?? for primitive types
+    const enableRot = controls.enableRotation ?? false
+    const blockWidth = controls.blockWidthRange || { min: 20, max: 40 }
+    const pixelFontProb = controls.pixelFontProbability ?? 0.1
+
     return {
-      // Create random positions that stay mostly within viewport
-      // but allow some overflow for visual interest
-      top: `${getRandomInt(-10, 75)}%`,
-      left: `${getRandomInt(-10, 75)}%`,
-      // Random scale with values above 1.2 increasingly rare
-      // Using power distribution with factor 4 to cluster toward lower values
-      scale: getRandomInt(50, 280, { distribution: 'power', factor: 4 }) / 100,
-      // Random z-index for layering
-      // Use power distribution to favor lower z-indices with occasional high ones
-      zIndex: getRandomInt(0, 9, { distribution: 'power', factor: 2 }),
-      rotateX: 0,
-      rotateY: 0,
-      rotateZ: Math.random() < 0.05 ? 90 : 0,
-      width: getRandomInt(20, 40),
+      top: `${getRandomInt(blockPosRange.min, blockPosRange.max)}%`,
+      left: `${getRandomInt(blockPosRange.min, blockPosRange.max)}%`,
+      scale:
+        getRandomInt(Math.floor(blockScale.min * 100), Math.floor(blockScale.max * 100), {
+          distribution: 'power',
+          factor: blockDistFactor,
+        }) / 100,
+      zIndex: getRandomInt(0, 9, { distribution: 'power', factor: 2 }), // Unchanged, doesn't use controls
+      rotateX: enableRot ? getRandomInt(-15, 15) : 0,
+      rotateY: enableRot ? getRandomInt(-15, 15) : 0,
+      rotateZ: enableRot && Math.random() < 0.1 ? 90 : 0,
+      width: getRandomInt(blockWidth.min, blockWidth.max),
       bg: 'transparent',
-      fontFamily: Math.random() < 0.1 ? 'pixel' : 'sans-serif',
+      fontFamily: Math.random() < pixelFontProb ? 'pixel' : 'sans-serif',
     }
-  }
+  }, [
+    controls.blockPositionRange,
+    controls.blockScaleRange,
+    controls.blockDistributionFactor,
+    controls.enableRotation,
+    controls.blockWidthRange,
+    controls.pixelFontProbability,
+  ])
 
   // Function to generate random wireframe style
   const generateRandomWireframeStyle = (): WireframeStyle => {
@@ -135,60 +269,59 @@ export default function Home() {
   // Generate random positions and scales for blocks on mount
   useEffect(() => {
     const styles: BlockStyle[] = []
-
-    // Create random styles for each block
     for (let i = 0; i < blockCount; i++) {
       styles.push(generateRandomStyle())
     }
-
     setBlockStyles(styles)
-  }, [])
+  }, [blockCount, generateRandomStyle])
 
-  // Function to start the regeneration interval
-  const startRegenerationInterval = () => {
-    // Clear any existing interval first
+  // New useEffect to react to Leva's isPaused control changes for immediate actions
+  useEffect(() => {
+    if (controls.isPaused) {
+      setBlocksToRegenerate(new Set<number>()) // Clear pending regenerations
+      // The main interval useEffect will also clear intervalRef.current
+    }
+  }, [controls.isPaused, setBlocksToRegenerate])
+
+  // Revised useEffect for managing the regeneration interval
+  useEffect(() => {
+    if (controls.isPaused) {
+      // Use Leva's control value directly
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
+      return
+    }
+
+    // If not paused, (re)set up the interval
+    // Clear previous interval if parameters changed while running
     if (intervalRef.current) {
       clearInterval(intervalRef.current)
     }
 
-    // Set up a new interval
     intervalRef.current = setInterval(() => {
-      if (!isPaused) {
-        // Pick 1-2 random blocks to regenerate
-        const randomCount = getRandomInt(1, 2, { distribution: 'power', factor: -1 }) // favor 2 slightly more often
-
-        setBlocksToRegenerate((current) => {
-          // Create a new Set based on the current one
-          const newSet = new Set(current)
-
-          // Add random blocks until we've added the desired number
-          // or tried a reasonable number of times
-          let attempts = 0
-          while (newSet.size < current.size + randomCount && attempts < 10) {
-            const randomIndex = getRandomInt(0, blockCount - 1)
-            newSet.add(randomIndex)
-            attempts++
-          }
-
-          return newSet
-        })
-
-        // Also randomize wireframe on each regeneration
-        setWireframeStyle(generateRandomWireframeStyle())
-      }
-    }, 4000) // every 4 seconds
+      const count = Math.min(controls.regenerateCount, blockCount)
+      setBlocksToRegenerate((current) => {
+        const newSet = new Set(current)
+        let attempts = 0
+        while (newSet.size < current.size + count && attempts < 10) {
+          const randomIndex = getRandomInt(0, blockCount - 1)
+          newSet.add(randomIndex)
+          attempts++
+        }
+        return newSet
+      })
+      setWireframeStyle(generateRandomWireframeStyle())
+    }, controls.regenerateInterval)
 
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current)
+        intervalRef.current = null
       }
     }
-  }
-
-  // Start or stop the interval based on isPaused state
-  useEffect(() => {
-    return startRegenerationInterval()
-  }, [isPaused])
+  }, [controls.isPaused, controls.regenerateInterval, controls.regenerateCount, blockCount])
 
   // Handle manual regeneration of all blocks
   const regenerateAllBlocks = () => {
@@ -203,10 +336,22 @@ export default function Home() {
     setWireframeStyle(generateRandomWireframeStyle())
   }
 
-  // Toggle pause state
-  const togglePause = () => {
-    setIsPaused((prev) => !prev)
-  }
+  // Memoized callback for when a block starts regeneration
+  const onBlockRegenerationStart = useCallback(
+    (blockIndex: number) => {
+      setBlocksToRegenerate((current) => {
+        const newSet = new Set(current)
+        newSet.delete(blockIndex)
+        return newSet
+      })
+      setBlockStyles((currentStyles) => {
+        const updatedStyles = [...currentStyles]
+        updatedStyles[blockIndex] = generateRandomStyle()
+        return updatedStyles
+      })
+    },
+    [generateRandomStyle], // generateRandomStyle is already memoized
+  )
 
   // Helper to render a single block with its position index
   const renderBlock = (i: number) => {
@@ -217,21 +362,9 @@ export default function Home() {
         key={i}
         index={i}
         shouldRegenerate={blocksToRegenerate.has(i)}
-        onRegenerationStart={() => {
-          // Remove this block from the regeneration set when it starts regenerating
-          setBlocksToRegenerate((current) => {
-            const newSet = new Set(current)
-            newSet.delete(i)
-            return newSet
-          })
-
-          // Update position and scale when regeneration starts
-          setBlockStyles((current) => {
-            const updated = [...current]
-            updated[i] = generateRandomStyle()
-            return updated
-          })
-        }}
+        glitchProbability={controls.glitchProbability}
+        isGloballyPaused={controls.isPaused}
+        onRegenerationStart={() => onBlockRegenerationStart(i)}
         content={JSON.stringify(intro)}
         style={{
           backgroundColor: style.bg,
@@ -251,135 +384,65 @@ export default function Home() {
   }
 
   return (
-    <Box h="100dvh" position="relative" display="flex" flexDirection="column">
-      {/* Positioned blocks */}
-      <Box position="relative" h="100%" overflow="hidden">
-        {blockStyles.length > 0 && Array.from({ length: blockCount }).map((_, i) => renderBlock(i))}
+    <>
+      <Leva oneLineLabels theme={{ colors: { accent1: '#000' } }} />
+      <Box h="100dvh" position="relative" display="flex" flexDirection="column">
+        {/* Positioned blocks */}
+        <Box position="relative" h="100%" overflow="hidden">
+          {blockStyles.length > 0 &&
+            Array.from({ length: blockCount }).map((_, i) => renderBlock(i))}
 
-        {/* Center intro - fixed position */}
-        <Box
-          position="absolute"
-          top="50%"
-          left="50%"
-          transform="translate(-50%, -50%)"
-          width="375px"
-          height="375px"
-          zIndex="20"
-        >
-          <Center bg="black" color="white" h="full">
-            <Stack w="70%" textWrap="balance">
-              <styled.h1>{intro.heading}</styled.h1>
-              {intro.paragraphs.map((paragraph, i) => (
-                <styled.p key={i}>
-                  {paragraph}
-                  <Scrambler>.</Scrambler>
-                </styled.p>
-              ))}
-            </Stack>
-          </Center>
-        </Box>
-
-        {/* Render either cube or sphere based on wireframeStyle */}
-        <Box
-          position="absolute"
-          style={{
-            top: wireframeStyle.top,
-            left: wireframeStyle.left,
-            width: wireframeStyle.width,
-            height: wireframeStyle.height,
-          }}
-          zIndex="-1"
-        >
-          {wireframeStyle.type === 'cube' ? (
-            <WireframeCube
-              wireframeColor={wireframeStyle.wireframeColor}
-              glitchIntensity={glitchIntensity}
-            />
-          ) : wireframeStyle.type === 'sphere' ? (
-            <WireframeSphere
-              widthSegments={wireframeStyle.segments}
-              heightSegments={wireframeStyle.segments}
-              wireframeColor={wireframeStyle.wireframeColor}
-              glitchIntensity={glitchIntensity}
-            />
-          ) : null}
-        </Box>
-
-        {/* Control buttons */}
-        <Box
-          position="fixed"
-          bottom="20px"
-          right="20px"
-          zIndex="50"
-          display="flex"
-          gap="10px"
-          alignItems="center"
-        >
-          <button
-            onClick={togglePause}
-            style={{
-              background: isPaused ? '#4CAF50' : '#f44336',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              padding: '8px 16px',
-              cursor: 'pointer',
-              fontWeight: 'bold',
-              boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
-            }}
+          {/* Center intro - fixed position */}
+          <Box
+            position="absolute"
+            top="50%"
+            left="50%"
+            transform="translate(-50%, -50%)"
+            width="375px"
+            height="375px"
+            zIndex="20"
           >
-            {isPaused ? 'Resume' : 'Pause'}
-          </button>
+            <Center bg="black" color="white" h="full">
+              <Stack w="70%" textWrap="balance">
+                <styled.h1>{intro.heading}</styled.h1>
+                {intro.paragraphs.map((paragraph, i) => (
+                  <styled.p key={i}>
+                    {paragraph}
+                    <Scrambler>.</Scrambler>
+                  </styled.p>
+                ))}
+              </Stack>
+            </Center>
+          </Box>
 
-          <button
-            onClick={regenerateAllBlocks}
+          {/* Render either cube or sphere based on wireframeStyle */}
+          <Box
+            position="absolute"
             style={{
-              background: '#2196F3',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              padding: '8px 16px',
-              cursor: 'pointer',
-              fontWeight: 'bold',
-              boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
+              top: wireframeStyle.top,
+              left: wireframeStyle.left,
+              width: wireframeStyle.width,
+              height: wireframeStyle.height,
             }}
+            zIndex="-1"
           >
-            Regenerate All
-          </button>
-
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              background: '#333',
-              padding: '4px 12px',
-              borderRadius: '4px',
-              boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
-            }}
-          >
-            <label htmlFor="glitch-intensity" style={{ color: 'white', fontSize: '14px' }}>
-              Glitch:
-            </label>
-            <input
-              id="glitch-intensity"
-              type="range"
-              min="0"
-              max="1"
-              step="0.1"
-              value={glitchIntensity}
-              onChange={(e) => setGlitchIntensity(parseFloat(e.target.value))}
-              style={{ width: '100px' }}
-            />
-            <span
-              style={{ color: 'white', fontSize: '14px', minWidth: '30px', textAlign: 'center' }}
-            >
-              {glitchIntensity.toFixed(1)}
-            </span>
-          </div>
+            {wireframeStyle.type === 'cube' ? (
+              <WireframeCube
+                wireframeColor={wireframeStyle.wireframeColor}
+                glitchIntensity={glitchIntensity}
+              />
+            ) : wireframeStyle.type === 'sphere' ? (
+              <WireframeSphere
+                widthSegments={wireframeStyle.segments}
+                heightSegments={wireframeStyle.segments}
+                wireframeColor={wireframeStyle.wireframeColor}
+                glitchIntensity={glitchIntensity}
+              />
+            ) : null}
+          </Box>
         </Box>
       </Box>
-    </Box>
+    </>
   )
 }
 
@@ -387,6 +450,8 @@ function LLMBlock({
   index,
   content,
   shouldRegenerate,
+  glitchProbability = 0.05,
+  isGloballyPaused,
   onRegenerationStart,
   style,
   ...props
@@ -394,6 +459,8 @@ function LLMBlock({
   index: number
   content: string
   shouldRegenerate: boolean
+  glitchProbability?: number
+  isGloballyPaused?: boolean
   onRegenerationStart: () => void
   style?: React.CSSProperties
 } & GridItemProps) {
@@ -587,7 +654,7 @@ function LLMBlock({
 
   // Whenever this block is flagged for regeneration and isn't currently streaming
   useEffect(() => {
-    if (shouldRegenerate && !isStreaming) {
+    if (shouldRegenerate && !isStreaming && !isGloballyPaused) {
       setIsStreaming(true)
       onRegenerationStart()
       setMessages([
@@ -597,12 +664,19 @@ function LLMBlock({
         },
       ])
 
-      // Randomly determine if this block should have glitch effects (< 5% chance)
-      if (Math.random() < 0.05) {
+      // Use the glitch probability from controls
+      if (Math.random() < glitchProbability) {
         setHasGlitchEffects(true)
       }
     }
-  }, [shouldRegenerate, isStreaming, currentText, onRegenerationStart])
+  }, [
+    shouldRegenerate,
+    isStreaming,
+    currentText,
+    onRegenerationStart,
+    glitchProbability,
+    isGloballyPaused,
+  ])
 
   return (
     <Box ref={blockRef} style={style} {...props}>

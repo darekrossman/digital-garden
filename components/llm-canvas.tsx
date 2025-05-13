@@ -25,7 +25,7 @@ export function LLMCanvas({
   // Reference to store the full generated text
   const fullGenerationRef = useRef<string>('')
 
-  const run = useCallback(async () => {
+  const run = async () => {
     if (!messages) return
 
     // Store the current text as previous before starting a new generation
@@ -49,18 +49,11 @@ export function LLMCanvas({
     } finally {
       setIsTransitioning(false)
     }
-  }, [messages, onComplete])
+  }
 
-  // Memoize messages to detect actual content changes
-  const memoizedMessages = useMemo(
-    () => messages,
-    [messages?.length, messages ? messages.map((m) => m.content).join() : ''],
-  )
-
-  // Run the generation when messages content actually changes
   useEffect(() => {
-    if (memoizedMessages) run()
-  }, [memoizedMessages, run])
+    run()
+  }, [])
 
   // Handle the word-by-word transition effect
   useEffect(() => {
