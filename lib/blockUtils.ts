@@ -1,7 +1,6 @@
 import { BlockStyle, ControlValues } from '@/types'
 import { DEFAULT_CONFIG } from './config'
 import { getRandomInt } from './helpers'
-import { generateRandomWireframeStyle } from './wireframeUtils'
 
 /**
  * Generates a random style for a block based on control values
