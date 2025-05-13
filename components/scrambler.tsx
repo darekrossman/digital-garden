@@ -16,7 +16,7 @@ export default function Scrambler({ children }: ScramblerProps) {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      if (Math.random() < 0.7) {
+      if (Math.random() < 0.5) {
         setFontIndices((prev) => {
           // Pick a random letter to change
           const idx = Math.floor(Math.random() * children.length)
@@ -25,7 +25,7 @@ export default function Scrambler({ children }: ScramblerProps) {
           return newIndices
         })
       }
-    }, 100)
+    }, 1200)
     return () => clearInterval(interval)
   }, [children.length])
 
