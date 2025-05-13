@@ -1,5 +1,7 @@
 'use client'
 
+import WireframeCube from '@/components/WireframeCube'
+import WireframeSphere from '@/components/WireframeSphere'
 import { LLMCanvas } from '@/components/llm-canvas'
 import Scrambler from '@/components/scrambler'
 import { getRandomInt } from '@/lib/helpers'
@@ -10,8 +12,25 @@ import { useEffect, useRef, useState } from 'react'
 type BlockStyle = {
   top: string
   left: string
+  width: number
   scale: number
   zIndex: number
+  rotateX: number
+  rotateY: number
+  rotateZ: number
+  bg: string
+}
+
+// Define a type for wireframe positioning and properties
+type WireframeStyle = {
+  top: string
+  left: string
+  width: string
+  height: string
+  scale: number
+  type: 'cube' | 'sphere' | null
+  segments?: number
+  wireframeColor: number
 }
 
 export default function Home() {
@@ -24,7 +43,7 @@ export default function Home() {
   }
 
   // There are 8 LLM blocks to position around the viewport
-  const blockCount = 8
+  const blockCount = 12
   // Track multiple blocks to regenerate with a Set of indices
   const [blocksToRegenerate, setBlocksToRegenerate] = useState(new Set<number>())
   // Store position and scale for each block
@@ -32,6 +51,21 @@ export default function Home() {
   // Add states for pausing regeneration
   const [isPaused, setIsPaused] = useState(false)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
+
+  // State for wireframe positioning and properties
+  const [wireframeStyle, setWireframeStyle] = useState<WireframeStyle>({
+    top: '0',
+    left: '0',
+    width: '50px',
+    height: '50px',
+    scale: 1,
+    type: null,
+    segments: 12,
+    wireframeColor: 0x000000,
+  })
+
+  // Add state for glitch intensity
+  const [glitchIntensity, setGlitchIntensity] = useState(0.5)
 
   // Function to generate a random style for a block
   const generateRandomStyle = (): BlockStyle => {
@@ -46,6 +80,52 @@ export default function Home() {
       // Random z-index for layering
       // Use power distribution to favor lower z-indices with occasional high ones
       zIndex: getRandomInt(0, 9, { distribution: 'power', factor: 2 }),
+      rotateX: 0,
+      rotateY: 0,
+      rotateZ: Math.random() < 0.05 ? 90 : 0,
+      width: getRandomInt(20, 40),
+      bg: 'transparent',
+    }
+  }
+
+  // Function to generate random wireframe style
+  const generateRandomWireframeStyle = (): WireframeStyle => {
+    const top = `${getRandomInt(-15, 75)}%`
+    const left = `${getRandomInt(-5, 75)}%`
+    const size = `${getRandomInt(50, 250)}px`
+    const type = Math.random() < 0.5 ? 'cube' : Math.random() < 0.5 ? 'sphere' : null
+    const scale = getRandomInt(80, 150) / 100
+    const segments = 12
+
+    // Generate a random color in hex format
+    // Using bright, vibrant colors for better visibility
+    const colors = [
+      0xff0000, // Red
+      0x00ff00, // Green
+      0x0000ff, // Blue
+      0xffff00, // Yellow
+      0xff00ff, // Magenta
+      0x00ffff, // Cyan
+      0xff8000, // Orange
+      0x8000ff, // Purple
+      0x0080ff, // Light Blue
+      0x8fff00, // Lime
+      0xff0080, // Hot Pink
+      0x000000, // Black (occasionally)
+      0xffffff, // White (occasionally)
+    ]
+
+    const wireframeColor = colors[getRandomInt(0, colors.length - 1)]
+
+    return {
+      top,
+      left,
+      width: size,
+      height: size,
+      scale,
+      type,
+      segments,
+      wireframeColor,
     }
   }
 
@@ -89,6 +169,9 @@ export default function Home() {
 
           return newSet
         })
+
+        // Also randomize wireframe on each regeneration
+        setWireframeStyle(generateRandomWireframeStyle())
       }
     }, 4000) // every 4 seconds
 
@@ -112,6 +195,9 @@ export default function Home() {
       allBlocks.add(i)
     }
     setBlocksToRegenerate(allBlocks)
+
+    // Also randomize wireframe when manually regenerating
+    setWireframeStyle(generateRandomWireframeStyle())
   }
 
   // Toggle pause state
@@ -145,15 +231,17 @@ export default function Home() {
         }}
         content={JSON.stringify(intro)}
         style={{
+          backgroundColor: style.bg,
           position: 'absolute',
           top: style.top,
           left: style.left,
-          transform: `scale(${style.scale})`,
           zIndex: style.zIndex,
-          width: '30vw',
-          height: '30vw',
-          transition: 'none', // No transitions for instant position changes
-          filter: `blur(${Math.max(0, (1 - style.scale) * 4)}px)`, // More blur for smaller scales
+          width: `${style.width}vw`,
+          // height: '30vw',
+          transition: 'none',
+          filter: `blur(${Math.max(0, (1 - style.scale) * 4)}px)`,
+          transformStyle: 'preserve-3d',
+          transform: `scale(${style.scale}) rotateX(${style.rotateX}deg) rotateY(${style.rotateY}deg) rotateZ(${style.rotateZ}deg)`,
         }}
       />
     )
@@ -171,12 +259,12 @@ export default function Home() {
           top="50%"
           left="50%"
           transform="translate(-50%, -50%)"
-          width="30vw"
-          height="30vw"
+          width="375px"
+          height="375px"
           zIndex="20"
         >
           <Center bg="black" color="white" h="full">
-            <Stack w="70%">
+            <Stack w="70%" textWrap="balance">
               <styled.h1>{intro.heading}</styled.h1>
               {intro.paragraphs.map((paragraph, i) => (
                 <styled.p key={i}>
@@ -188,8 +276,42 @@ export default function Home() {
           </Center>
         </Box>
 
+        {/* Render either cube or sphere based on wireframeStyle */}
+        <Box
+          position="absolute"
+          style={{
+            top: wireframeStyle.top,
+            left: wireframeStyle.left,
+            width: wireframeStyle.width,
+            height: wireframeStyle.height,
+          }}
+          zIndex="-1"
+        >
+          {wireframeStyle.type === 'cube' ? (
+            <WireframeCube
+              wireframeColor={wireframeStyle.wireframeColor}
+              glitchIntensity={glitchIntensity}
+            />
+          ) : wireframeStyle.type === 'sphere' ? (
+            <WireframeSphere
+              widthSegments={wireframeStyle.segments}
+              heightSegments={wireframeStyle.segments}
+              wireframeColor={wireframeStyle.wireframeColor}
+              glitchIntensity={glitchIntensity}
+            />
+          ) : null}
+        </Box>
+
         {/* Control buttons */}
-        <Box position="fixed" bottom="20px" right="20px" zIndex="50" display="flex" gap="10px">
+        <Box
+          position="fixed"
+          bottom="20px"
+          right="20px"
+          zIndex="50"
+          display="flex"
+          gap="10px"
+          alignItems="center"
+        >
           <button
             onClick={togglePause}
             style={{
@@ -221,6 +343,37 @@ export default function Home() {
           >
             Regenerate All
           </button>
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              background: '#333',
+              padding: '4px 12px',
+              borderRadius: '4px',
+              boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
+            }}
+          >
+            <label htmlFor="glitch-intensity" style={{ color: 'white', fontSize: '14px' }}>
+              Glitch:
+            </label>
+            <input
+              id="glitch-intensity"
+              type="range"
+              min="0"
+              max="1"
+              step="0.1"
+              value={glitchIntensity}
+              onChange={(e) => setGlitchIntensity(parseFloat(e.target.value))}
+              style={{ width: '100px' }}
+            />
+            <span
+              style={{ color: 'white', fontSize: '14px', minWidth: '30px', textAlign: 'center' }}
+            >
+              {glitchIntensity.toFixed(1)}
+            </span>
+          </div>
         </Box>
       </Box>
     </Box>
@@ -293,9 +446,11 @@ function LLMBlock({
     const esotericCodePrompt =
       'adding full or partial code snippets if the text is sufficiently strange, using assembly language, javascript, python, cobalt or json'
 
-    const basePrompt = `Rewrite the following text in a ${adjective} way, and scramble the name of the person mentioned in strange ways, replacing some letters entirely`
+    // const basePrompt = `Rewrite the following text in a ${adjective} way, and scramble the name of the person mentioned in strange ways, replacing some letters entirely`
 
-    if (Math.random() < 0.2) {
+    const basePrompt = `Rewrite the following text in a ${adjective} way.`
+
+    if (Math.random() < 0.33) {
       return `${basePrompt}, ${esotericCodePrompt}: ${base}`
     }
 
@@ -325,16 +480,14 @@ function LLMBlock({
   }, [shouldRegenerate, isStreaming, currentText, onRegenerationStart])
 
   return (
-    <Box overflow="auto" h="100%" w="100%" aspectRatio="1/1" style={style} {...props}>
-      <Box maxW="100%" h="100%" display="flex" alignItems="center">
-        <LLMCanvas
-          messages={messages}
-          onComplete={(txt) => {
-            setCurrentText(txt)
-            setIsStreaming(false) // Mark streaming as done
-          }}
-        />
-      </Box>
+    <Box style={style} {...props}>
+      <LLMCanvas
+        messages={messages}
+        onComplete={(txt) => {
+          setCurrentText(txt)
+          setIsStreaming(false) // Mark streaming as done
+        }}
+      />
     </Box>
   )
 }

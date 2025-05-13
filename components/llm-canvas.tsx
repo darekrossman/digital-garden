@@ -7,6 +7,7 @@ import { Box, Stack, styled } from '@/styled-system/jsx'
 import { readStreamableValue } from 'ai/rsc'
 import { ChatCompletionMessageParam } from 'openai/src/resources.js'
 import { useEffect, useRef, useState } from 'react'
+import WireframeCube from './WireframeCube'
 
 export function LLMCanvas({
   messages,
@@ -87,15 +88,8 @@ export function LLMCanvas({
   }, [previousGeneration, currentGeneration, isTransitioning])
 
   return (
-    <Box
-      className={css({
-        '& *': {
-          textWrap: 'balance',
-        },
-        transition: 'opacity 0.5s ease',
-      })}
-    >
-      <Stack>
+    <Box position="relative">
+      <Stack gap="2">
         <Markdown>{isTransitioning ? displayText : fullGenerationRef.current}</Markdown>
       </Stack>
     </Box>
