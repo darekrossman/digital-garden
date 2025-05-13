@@ -6,7 +6,7 @@ import { css } from '@/styled-system/css'
 import { Box, Stack, styled } from '@/styled-system/jsx'
 import { readStreamableValue } from 'ai/rsc'
 import { ChatCompletionMessageParam } from 'openai/src/resources.js'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import WireframeCube from './WireframeCube'
 
 export function LLMCanvas({
@@ -25,7 +25,7 @@ export function LLMCanvas({
   // Reference to store the full generated text
   const fullGenerationRef = useRef<string>('')
 
-  const run = async () => {
+  const run = useCallback(async () => {
     if (!messages) return
 
     // Store the current text as previous before starting a new generation
@@ -49,13 +49,18 @@ export function LLMCanvas({
     } finally {
       setIsTransitioning(false)
     }
-  }
+  }, [messages, onComplete])
 
-  // Run the generation when messages change
+  // Memoize messages to detect actual content changes
+  const memoizedMessages = useMemo(
+    () => messages,
+    [messages?.length, messages ? messages.map((m) => m.content).join() : ''],
+  )
+
+  // Run the generation when messages content actually changes
   useEffect(() => {
-    run()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(messages)])
+    if (memoizedMessages) run()
+  }, [memoizedMessages, run])
 
   // Handle the word-by-word transition effect
   useEffect(() => {

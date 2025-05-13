@@ -1,6 +1,13 @@
-import type { Metadata } from 'next'
 import './globals.css'
 import { css } from '@/styled-system/css'
+import type { Metadata } from 'next'
+import { Silkscreen as PixelFont } from 'next/font/google'
+
+const pfont = PixelFont({
+  weight: ['400'],
+  subsets: ['latin'],
+  variable: '--fonts-pixel',
+})
 
 export const metadata: Metadata = {
   title: 'Personal Portfolio of Darek Rossman',
@@ -13,7 +20,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className={pfont.variable}>
       <body className={css({ position: 'relative' })}>{children}</body>
     </html>
   )

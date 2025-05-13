@@ -6,6 +6,7 @@ import { LLMCanvas } from '@/components/llm-canvas'
 import Scrambler from '@/components/scrambler'
 import { getRandomInt } from '@/lib/helpers'
 import { Box, Center, GridItemProps, Stack, styled } from '@/styled-system/jsx'
+import { Token, token } from '@/styled-system/tokens'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 // Define a type for block positioning and scaling
@@ -19,6 +20,7 @@ type BlockStyle = {
   rotateY: number
   rotateZ: number
   bg: string
+  fontFamily: string
 }
 
 // Define a type for wireframe positioning and properties
@@ -43,7 +45,7 @@ export default function Home() {
   }
 
   // There are 8 LLM blocks to position around the viewport
-  const blockCount = 12
+  const blockCount = 9
   // Track multiple blocks to regenerate with a Set of indices
   const [blocksToRegenerate, setBlocksToRegenerate] = useState(new Set<number>())
   // Store position and scale for each block
@@ -85,6 +87,7 @@ export default function Home() {
       rotateZ: Math.random() < 0.05 ? 90 : 0,
       width: getRandomInt(20, 40),
       bg: 'transparent',
+      fontFamily: Math.random() < 0.1 ? 'pixel' : 'sans-serif',
     }
   }
 
@@ -237,7 +240,7 @@ export default function Home() {
           left: style.left,
           zIndex: style.zIndex,
           width: `${style.width}vw`,
-          // height: '30vw',
+          fontFamily: token(`fonts.${style.fontFamily}` as Token),
           transition: 'none',
           filter: `blur(${Math.max(0, (1 - style.scale) * 4)}px)`,
           transformStyle: 'preserve-3d',
@@ -480,8 +483,9 @@ function LLMBlock({
       () => {
         const skewX = (Math.random() - 0.5) * 5
         const skewY = (Math.random() - 0.5) * 5
-        const rotate = (Math.random() - 0.5) * 2
-        element.style.transform = `${originalTransform} skew(${skewX}deg, ${skewY}deg) rotate(${rotate}deg)`
+        const scale = getRandomInt(0, 10) / 100
+
+        element.style.transform = `${originalTransform} skew(${skewX}deg, ${skewY}deg) scale(${scale})`
 
         const timeout = window.setTimeout(
           () => {
@@ -556,11 +560,17 @@ function LLMBlock({
     const esotericCodePrompt =
       'adding full or partial code snippets if the text is sufficiently strange, using assembly language, javascript, python, cobalt or json'
 
-    // const basePrompt = `Rewrite the following text in a ${adjective} way, and scramble the name of the person mentioned in strange ways, replacing some letters entirely`
+    const basePrompts = [
+      `Rewrite the following text in a ${adjective} way.`,
+      `Rewrite the following text in a ${adjective} way, and scramble the name of the person mentioned in strange ways, replacing some letters entirely`,
+      `Generate ${adjective} ASCII art.`,
+    ]
 
-    const basePrompt = `Rewrite the following text in a ${adjective} way.`
+    const basePromptIndex = Math.random() < 0.8 ? getRandomInt(0, 1) : 2
 
-    if (Math.random() < 0.33) {
+    const basePrompt = basePrompts[basePromptIndex]
+
+    if (Math.random() < 0.33 && basePromptIndex !== 2) {
       return `${basePrompt}, ${esotericCodePrompt}: ${base}`
     }
 

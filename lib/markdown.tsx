@@ -38,6 +38,7 @@ export function Markdown({ children, className }: MarkdownProps) {
             <styled.pre
               {...props}
               lineHeight="1"
+              fontFamily="mono"
               bg="var(--prebg)"
               style={{
                 ['--prebg' as string]: Math.random() < 0.1 ? 'black' : 'transprent',
@@ -54,13 +55,13 @@ export function Markdown({ children, className }: MarkdownProps) {
           const fg = bg === 'yellow' ? 'black' : 'white'
 
           return (
-            <code
+            <styled.code
+              overflow="hidden"
+              fontFamily="mono"
+              fontSize="sm"
               className={css({
                 bg: 'var(--bg)',
                 color: 'var(--fg)',
-                overflow: 'hidden',
-                fontFamily: 'mono',
-                fontSize: 'sm',
               })}
               style={{
                 ['--bg' as string]: bg,
@@ -68,7 +69,7 @@ export function Markdown({ children, className }: MarkdownProps) {
               }}
             >
               {children}
-            </code>
+            </styled.code>
           )
         },
       }}
