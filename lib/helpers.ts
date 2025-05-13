@@ -1,3 +1,7 @@
+/**
+ * Helper functions for the portfolio application
+ */
+
 // Helper function that returns a random integer between min and max (inclusive)
 // with optional non-linear distribution
 export const getRandomInt = (
@@ -63,4 +67,72 @@ export const getRandomInt = (
     default:
       return Math.floor(random * range) + min
   }
+}
+
+/**
+ * Debounce function to limit the rate at which a function can fire
+ */
+export function debounce<T extends (...args: any[]) => any>(
+  func: T,
+  wait: number,
+): (...args: Parameters<T>) => void {
+  let timeout: NodeJS.Timeout | null = null
+
+  return function (...args: Parameters<T>) {
+    if (timeout) clearTimeout(timeout)
+    timeout = setTimeout(() => func(...args), wait)
+  }
+}
+
+/**
+ * Creates an array of specified length filled with the output of a callback
+ */
+export function createArrayOfLength<T>(length: number, callback: (index: number) => T): T[] {
+  return Array.from({ length }, (_, index) => callback(index))
+}
+
+/**
+ * Safely parse JSON with a fallback value
+ */
+export function safeJsonParse<T>(json: string, fallback: T): T {
+  try {
+    return JSON.parse(json) as T
+  } catch (error) {
+    return fallback
+  }
+}
+
+/**
+ * Get a random item from an array
+ */
+export function getRandomArrayItem<T>(array: T[]): T {
+  return array[getRandomInt(0, array.length - 1)]
+}
+
+/**
+ * Create an interval that can be easily cleared
+ */
+export function createClearableInterval(callback: () => void, ms: number): {
+  clear: () => void
+  id: NodeJS.Timeout
+} {
+  const id = setInterval(callback, ms)
+  return {
+    clear: () => clearInterval(id),
+    id,
+  }
+}
+
+/**
+ * Clear all timeouts in an array
+ */
+export function clearAllTimeouts(timeouts: (NodeJS.Timeout | number)[]): void {
+  timeouts.forEach((id) => clearTimeout(id))
+}
+
+/**
+ * Clamp a number between min and max values
+ */
+export function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max)
 }
