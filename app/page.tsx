@@ -1,6 +1,5 @@
 'use client'
 
-import WireframeCity from '@/components/WireframeCity'
 import { LLMCanvas } from '@/components/llm-canvas'
 import Scrambler from '@/components/scrambler'
 import { getRandomInt } from '@/lib/helpers'
@@ -162,20 +161,8 @@ export default function Home() {
 
   return (
     <Box h="100dvh" position="relative" display="flex" flexDirection="column">
-      {/* Wireframe city background */}
-      <Box
-        position="absolute"
-        top="0"
-        left="0"
-        right="0"
-        bottom="0"
-        zIndex="0"
-        pointerEvents="none" // Let mouse events pass through to content below
-      >
-        <WireframeCity />
-      </Box>
-
-      <Box position="relative" h="100%" overflow="hidden" zIndex="1">
+      {/* Positioned blocks */}
+      <Box position="relative" h="100%" overflow="hidden">
         {blockStyles.length > 0 && Array.from({ length: blockCount }).map((_, i) => renderBlock(i))}
 
         {/* Center intro - fixed position */}
