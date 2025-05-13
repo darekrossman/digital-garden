@@ -6,7 +6,7 @@ import { LLMCanvas } from '@/components/llm-canvas'
 import Scrambler from '@/components/scrambler'
 import { getRandomInt } from '@/lib/helpers'
 import { Box, Center, GridItemProps, Stack, styled } from '@/styled-system/jsx'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 // Define a type for block positioning and scaling
 type BlockStyle = {
@@ -398,6 +398,12 @@ function LLMBlock({
   const [currentText, setCurrentText] = useState(content)
   // Track if this block is currently streaming content
   const [isStreaming, setIsStreaming] = useState(false)
+  // Track if this block should display glitch effects
+  const [hasGlitchEffects, setHasGlitchEffects] = useState(false)
+  // Reference to the block element for applying glitch effects
+  const blockRef = useRef<HTMLDivElement>(null)
+  // Keep track of timeouts to clear them on unmount
+  const timeoutsRef = useRef<number[]>([])
 
   const adjectives = [
     'Curious',
@@ -431,6 +437,110 @@ function LLMBlock({
     'Murky',
     'Restless',
   ]
+
+  // Function to apply glitch effects to the block
+  const applyGlitchEffects = useCallback(() => {
+    if (!blockRef.current || !hasGlitchEffects) return
+
+    const element = blockRef.current
+    const originalTransform = style?.transform || ''
+    const originalFilter = style?.filter || ''
+    const originalOpacity = element.style.opacity || '1'
+
+    // Apply random glitch effects
+    const effects = [
+      // Text blinking effect
+      () => {
+        element.style.opacity = '0'
+        const timeout = window.setTimeout(
+          () => {
+            element.style.opacity = originalOpacity
+          },
+          Math.random() * 100 + 50,
+        )
+        timeoutsRef.current.push(timeout)
+      },
+
+      // Small position jumps
+      () => {
+        const jumpX = (Math.random() - 0.5) * 10
+        const jumpY = (Math.random() - 0.5) * 10
+        element.style.transform = `${originalTransform} translate(${jumpX}px, ${jumpY}px)`
+
+        const timeout = window.setTimeout(
+          () => {
+            element.style.transform = originalTransform
+          },
+          Math.random() * 200 + 100,
+        )
+        timeoutsRef.current.push(timeout)
+      },
+
+      // Distortion effect (skew/rotation)
+      () => {
+        const skewX = (Math.random() - 0.5) * 5
+        const skewY = (Math.random() - 0.5) * 5
+        const rotate = (Math.random() - 0.5) * 2
+        element.style.transform = `${originalTransform} skew(${skewX}deg, ${skewY}deg) rotate(${rotate}deg)`
+
+        const timeout = window.setTimeout(
+          () => {
+            element.style.transform = originalTransform
+          },
+          Math.random() * 150 + 100,
+        )
+        timeoutsRef.current.push(timeout)
+      },
+
+      // Brief blur effect
+      () => {
+        element.style.filter = `${originalFilter} blur(2px)`
+
+        const timeout = window.setTimeout(
+          () => {
+            element.style.filter = originalFilter
+          },
+          Math.random() * 120 + 80,
+        )
+        timeoutsRef.current.push(timeout)
+      },
+    ]
+
+    // Randomly select one effect to apply
+    const randomEffect = effects[Math.floor(Math.random() * effects.length)]
+    randomEffect()
+
+    // Schedule next glitch effect if still has glitch effects
+    if (hasGlitchEffects) {
+      const nextGlitchTimeout = window.setTimeout(
+        () => {
+          applyGlitchEffects()
+        },
+        Math.random() * 2000 + 1000,
+      ) // Apply effect every 1-3 seconds
+      timeoutsRef.current.push(nextGlitchTimeout)
+    }
+  }, [hasGlitchEffects, style])
+
+  // Clean up all timeouts on unmount
+  useEffect(() => {
+    return () => {
+      timeoutsRef.current.forEach(clearTimeout)
+    }
+  }, [])
+
+  // Effect to start/stop glitch effects
+  useEffect(() => {
+    if (hasGlitchEffects) {
+      applyGlitchEffects()
+
+      // Automatically turn off glitch effects after some time
+      const disableTimeout = window.setTimeout(() => {
+        setHasGlitchEffects(false)
+      }, 15000) // Stop effects after 15 seconds
+      timeoutsRef.current.push(disableTimeout)
+    }
+  }, [hasGlitchEffects, applyGlitchEffects])
 
   const buildPrompt = (base: string) => {
     const adjective = adjectives[getRandomInt(0, adjectives.length - 1)]
@@ -476,11 +586,16 @@ function LLMBlock({
           content: buildPrompt(currentText),
         },
       ])
+
+      // Randomly determine if this block should have glitch effects (< 5% chance)
+      if (Math.random() < 0.05) {
+        setHasGlitchEffects(true)
+      }
     }
   }, [shouldRegenerate, isStreaming, currentText, onRegenerationStart])
 
   return (
-    <Box style={style} {...props}>
+    <Box ref={blockRef} style={style} {...props}>
       <LLMCanvas
         messages={messages}
         onComplete={(txt) => {
