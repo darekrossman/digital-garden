@@ -9,9 +9,9 @@ export function generateRandomBlockStyle(controls: Partial<ControlValues>): Bloc
   const blockPosRange = controls.blockPositionRange || { min: -10, max: 75 }
   const blockScale = controls.blockScaleRange || { min: 0.5, max: 2.8 }
   const blockDistFactor = controls.blockDistributionFactor ?? 4
-  const enableRot = controls.enableRotation ?? false
+  const enableRot = controls.enableRotation ?? true
   const blockWidth = controls.blockWidthRange || { min: 20, max: 40 }
-  const pixelFontProb = controls.pixelFontProbability ?? 0.1
+  const pixelFontProb = controls.pixelFontProbability ?? 0.5
 
   return {
     top: `${getRandomInt(blockPosRange.min, blockPosRange.max)}%`,
@@ -22,8 +22,8 @@ export function generateRandomBlockStyle(controls: Partial<ControlValues>): Bloc
         factor: blockDistFactor,
       }) / 100,
     zIndex: getRandomInt(0, 9, { distribution: 'power', factor: 2 }),
-    rotateX: enableRot ? getRandomInt(-15, 15) : 0,
-    rotateY: enableRot ? getRandomInt(-15, 15) : 0,
+    rotateX: 0,
+    rotateY: 0,
     rotateZ: enableRot && Math.random() < 0.1 ? 90 : 0,
     width: getRandomInt(blockWidth.min, blockWidth.max),
     bg: 'transparent',
@@ -79,17 +79,17 @@ export function generateRandomWireframeStyle(): WireframeStyle {
 export function regenerateBlocks(
   current: Set<number>,
   count: number,
-  blockCount: number
+  blockCount: number,
 ): Set<number> {
   const newSet = new Set(current)
   let attempts = 0
-  
+
   while (newSet.size < current.size + count && attempts < 10) {
     const randomIndex = getRandomInt(0, blockCount - 1)
     newSet.add(randomIndex)
     attempts++
   }
-  
+
   return newSet
 }
 
@@ -104,8 +104,8 @@ export function getBlockTransform(style: BlockStyle): string {
  * Creates an array of random block styles
  */
 export function generateInitialBlockStyles(
-  count: number, 
-  generator: () => BlockStyle
+  count: number,
+  generator: () => BlockStyle,
 ): BlockStyle[] {
   const styles: BlockStyle[] = []
   for (let i = 0; i < count; i++) {

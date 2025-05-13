@@ -1,13 +1,11 @@
 'use client'
 
+import { Markdown } from '@/components/markdown'
 import { generate } from '@/lib/inference'
-import { Markdown } from '@/lib/markdown'
-import { css } from '@/styled-system/css'
-import { Box, Stack, styled } from '@/styled-system/jsx'
+import { Box, Stack } from '@/styled-system/jsx'
 import { readStreamableValue } from 'ai/rsc'
 import { ChatCompletionMessageParam } from 'openai/src/resources.js'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import WireframeCube from './WireframeCube'
+import { useEffect, useRef, useState } from 'react'
 
 export function LLMCanvas({
   messages,

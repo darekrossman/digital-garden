@@ -1,9 +1,7 @@
+import { getRandomInt } from '@/lib/helpers'
 import { css } from '@/styled-system/css'
-import { Stack, styled } from '@/styled-system/jsx'
-import { token } from '@/styled-system/tokens'
-import { ReactNode } from 'react'
+import { styled } from '@/styled-system/jsx'
 import ReactMarkdown from 'react-markdown'
-import { getRandomInt } from './helpers'
 
 interface MarkdownProps {
   children: string
@@ -13,7 +11,7 @@ interface MarkdownProps {
 /**
  * Convert markdown string to React components
  */
-export function Markdown({ children, className }: MarkdownProps) {
+export function Markdown({ children }: MarkdownProps) {
   return (
     <ReactMarkdown
       components={{

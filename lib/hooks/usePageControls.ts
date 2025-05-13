@@ -34,20 +34,20 @@ export function usePageControls({
   // Convert initial wireframe color to hex string for Leva
   // Ensure it's a valid hex color with padding to 6 digits
   const colorString = '#' + (initialWireframeColor || 0).toString(16).padStart(6, '0')
-  
+
   // Create callback handlers for buttons
   const handleRegenerateAll = useCallback(() => {
     if (onRegenerateAll) onRegenerateAll()
   }, [onRegenerateAll])
-  
+
   const handleRandomizeWireframe = useCallback(() => {
     if (onRandomizeWireframe) onRandomizeWireframe()
   }, [onRandomizeWireframe])
-  
+
   const handleRegeneratePositions = useCallback(() => {
     if (onRegeneratePositions) onRegeneratePositions()
   }, [onRegeneratePositions])
-  
+
   // Animation controls
   const animationControls = useLevaControls('animation', {
     isPaused: {
@@ -63,7 +63,7 @@ export function usePageControls({
     },
     regenerateAll: button(handleRegenerateAll),
   })
-  
+
   // Wireframe controls
   const wireframeControls = useLevaControls('wireframe', {
     glitchIntensity: {
@@ -91,7 +91,7 @@ export function usePageControls({
     },
     randomizeWireframe: button(handleRandomizeWireframe),
   })
-  
+
   // Block controls
   const blockControls = useLevaControls('blocks', {
     blockCount: {
@@ -136,7 +136,7 @@ export function usePageControls({
       label: 'Distribution Factor',
     },
     enableRotation: {
-      value: false,
+      value: true,
       label: 'Enable 3D Rotation',
     },
     pixelFontProbability: {
@@ -153,28 +153,50 @@ export function usePageControls({
   const safeControls: ControlValues = {
     // Animation controls
     isPaused: typeof animationControls.isPaused === 'boolean' ? animationControls.isPaused : false,
-    regenerateInterval: typeof animationControls.regenerateInterval === 'number' ? animationControls.regenerateInterval : 10000,
+    regenerateInterval:
+      typeof animationControls.regenerateInterval === 'number'
+        ? animationControls.regenerateInterval
+        : 10000,
     regenerateAll: handleRegenerateAll,
-    
+
     // Wireframe controls
-    glitchIntensity: typeof wireframeControls.glitchIntensity === 'number' ? wireframeControls.glitchIntensity : 0.5,
+    glitchIntensity:
+      typeof wireframeControls.glitchIntensity === 'number'
+        ? wireframeControls.glitchIntensity
+        : 0.5,
     wireframeType: (wireframeControls.wireframeType as 'none' | 'cube' | 'sphere') || 'none',
-    wireframeSegments: typeof wireframeControls.wireframeSegments === 'number' ? wireframeControls.wireframeSegments : 12,
-    wireframeColor: typeof wireframeControls.wireframeColor === 'string' ? wireframeControls.wireframeColor : colorString,
+    wireframeSegments:
+      typeof wireframeControls.wireframeSegments === 'number'
+        ? wireframeControls.wireframeSegments
+        : 12,
+    wireframeColor:
+      typeof wireframeControls.wireframeColor === 'string'
+        ? wireframeControls.wireframeColor
+        : colorString,
     randomizeWireframe: handleRandomizeWireframe,
-    
+
     // Block controls
-    blockCount: typeof blockControls.blockCount === 'number' ? blockControls.blockCount : blockCount,
-    glitchProbability: typeof blockControls.glitchProbability === 'number' ? blockControls.glitchProbability : 0.05,
-    regenerateCount: typeof blockControls.regenerateCount === 'number' ? blockControls.regenerateCount : 2,
+    blockCount:
+      typeof blockControls.blockCount === 'number' ? blockControls.blockCount : blockCount,
+    glitchProbability:
+      typeof blockControls.glitchProbability === 'number' ? blockControls.glitchProbability : 0.05,
+    regenerateCount:
+      typeof blockControls.regenerateCount === 'number' ? blockControls.regenerateCount : 2,
     blockPositionRange: blockControls.blockPositionRange || { min: -10, max: 75 },
     blockScaleRange: blockControls.blockScaleRange || { min: 0.5, max: 2.8 },
     blockWidthRange: blockControls.blockWidthRange || { min: 20, max: 40 },
-    blockDistributionFactor: typeof blockControls.blockDistributionFactor === 'number' ? blockControls.blockDistributionFactor : 4,
-    enableRotation: typeof blockControls.enableRotation === 'boolean' ? blockControls.enableRotation : false,
-    pixelFontProbability: typeof blockControls.pixelFontProbability === 'number' ? blockControls.pixelFontProbability : 0.1,
+    blockDistributionFactor:
+      typeof blockControls.blockDistributionFactor === 'number'
+        ? blockControls.blockDistributionFactor
+        : 4,
+    enableRotation:
+      typeof blockControls.enableRotation === 'boolean' ? blockControls.enableRotation : false,
+    pixelFontProbability:
+      typeof blockControls.pixelFontProbability === 'number'
+        ? blockControls.pixelFontProbability
+        : 0.1,
     regenerateAllPositions: handleRegeneratePositions,
   }
-  
+
   return safeControls
 }
