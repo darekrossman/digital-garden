@@ -26,7 +26,7 @@ export const WIREFRAME_COLORS = [
 export const DEFAULT_CONFIG = {
   // Animation
   isPaused: false,
-  regenerateInterval: 3000,
+  regenerateInterval: 7000,
 
   // Wireframe
   wireframe: {
@@ -46,14 +46,14 @@ export const DEFAULT_CONFIG = {
 
   // Blocks
   blocks: {
-    count: 8,
+    count: 10,
     glitchProbability: 0.1,
     regenerateCount: 1,
     positionRange: { min: -10, max: 80 },
-    scaleRange: { min: 0.5, max: 2.6 },
+    scaleRange: { min: 0.6, max: 2.6 },
     widthRange: { min: 20, max: 40 },
-    distributionFactor: 1.2,
-    enableRotation: true,
+    distributionFactor: 3,
+    rotateZProbability: 0.1,
     pixelFontProbability: 0.3,
   },
 }
@@ -115,7 +115,7 @@ export const getDefaultControlValues = (): ControlValues => {
     blockScaleRange: DEFAULT_CONFIG.blocks.scaleRange,
     blockWidthRange: DEFAULT_CONFIG.blocks.widthRange,
     blockDistributionFactor: DEFAULT_CONFIG.blocks.distributionFactor,
-    enableRotation: DEFAULT_CONFIG.blocks.enableRotation,
+    rotateZProbability: DEFAULT_CONFIG.blocks.rotateZProbability,
     pixelFontProbability: DEFAULT_CONFIG.blocks.pixelFontProbability,
     // These functions will be replaced by actual implementations
     regenerateAll: () => {},

@@ -3,7 +3,7 @@
 import { ControlValues } from '@/types'
 import { button, useControls as useLevaControls } from 'leva'
 import { useCallback } from 'react'
-import { getDefaultControlValues, DEFAULT_CONFIG } from '../config'
+import { DEFAULT_CONFIG, getDefaultControlValues } from '../config'
 
 /**
  * Props for the usePageControls hook
@@ -13,7 +13,7 @@ interface UsePageControlsProps {
   onRegenerateAll?: () => void
   onRandomizeWireframe?: () => void
   onRegeneratePositions?: () => void
-  
+
   // Optional overrides for the default values
   initialValues?: Partial<ControlValues>
 }
@@ -30,14 +30,15 @@ export function usePageControls({
 }: UsePageControlsProps): ControlValues {
   // Get default values from our config
   const defaults = getDefaultControlValues()
-  
+
   // Merge with any provided initial values
   const mergedValues = { ...defaults, ...initialValues }
-  
+
   // Convert wireframe color to hex string for Leva if it's a number
-  const colorString = typeof mergedValues.wireframeColor === 'number' 
-    ? '#' + (mergedValues.wireframeColor || 0).toString(16).padStart(6, '0')
-    : mergedValues.wireframeColor
+  const colorString =
+    typeof mergedValues.wireframeColor === 'number'
+      ? '#' + (mergedValues.wireframeColor || 0).toString(16).padStart(6, '0')
+      : mergedValues.wireframeColor
 
   // Create callback handlers for buttons
   const handleRegenerateAll = useCallback(() => {
@@ -139,9 +140,12 @@ export function usePageControls({
       step: 0.5,
       label: 'Distribution Factor',
     },
-    enableRotation: {
-      value: mergedValues.enableRotation,
-      label: 'Enable 3D Rotation',
+    rotateZProbability: {
+      value: mergedValues.rotateZProbability,
+      min: 0,
+      max: 1,
+      step: 0.01,
+      label: 'RotateZ Probability',
     },
     pixelFontProbability: {
       value: mergedValues.pixelFontProbability,
@@ -156,49 +160,62 @@ export function usePageControls({
   // Create a properly typed ControlValues object with our flattened controls
   const safeControls: ControlValues = {
     // Animation controls
-    isPaused: typeof animationControls.isPaused === 'boolean' 
-      ? animationControls.isPaused 
-      : DEFAULT_CONFIG.isPaused,
-    regenerateInterval: typeof animationControls.regenerateInterval === 'number'
-      ? animationControls.regenerateInterval
-      : DEFAULT_CONFIG.regenerateInterval,
+    isPaused:
+      typeof animationControls.isPaused === 'boolean'
+        ? animationControls.isPaused
+        : DEFAULT_CONFIG.isPaused,
+    regenerateInterval:
+      typeof animationControls.regenerateInterval === 'number'
+        ? animationControls.regenerateInterval
+        : DEFAULT_CONFIG.regenerateInterval,
     regenerateAll: handleRegenerateAll,
 
     // Wireframe controls
-    glitchIntensity: typeof wireframeControls.glitchIntensity === 'number'
-      ? wireframeControls.glitchIntensity
-      : DEFAULT_CONFIG.wireframe.glitchIntensity,
-    wireframeType: (wireframeControls.wireframeType as 'none' | 'cube' | 'sphere') || DEFAULT_CONFIG.wireframe.type,
-    wireframeSegments: typeof wireframeControls.wireframeSegments === 'number'
-      ? wireframeControls.wireframeSegments
-      : DEFAULT_CONFIG.wireframe.segments,
-    wireframeColor: typeof wireframeControls.wireframeColor === 'string'
-      ? wireframeControls.wireframeColor
-      : DEFAULT_CONFIG.wireframe.wireframeColor,
+    glitchIntensity:
+      typeof wireframeControls.glitchIntensity === 'number'
+        ? wireframeControls.glitchIntensity
+        : DEFAULT_CONFIG.wireframe.glitchIntensity,
+    wireframeType:
+      (wireframeControls.wireframeType as 'none' | 'cube' | 'sphere') ||
+      DEFAULT_CONFIG.wireframe.type,
+    wireframeSegments:
+      typeof wireframeControls.wireframeSegments === 'number'
+        ? wireframeControls.wireframeSegments
+        : DEFAULT_CONFIG.wireframe.segments,
+    wireframeColor:
+      typeof wireframeControls.wireframeColor === 'string'
+        ? wireframeControls.wireframeColor
+        : DEFAULT_CONFIG.wireframe.wireframeColor,
     randomizeWireframe: handleRandomizeWireframe,
 
     // Block controls
-    blockCount: typeof blockControls.blockCount === 'number' 
-      ? blockControls.blockCount 
-      : DEFAULT_CONFIG.blocks.count,
-    glitchProbability: typeof blockControls.glitchProbability === 'number' 
-      ? blockControls.glitchProbability 
-      : DEFAULT_CONFIG.blocks.glitchProbability,
-    regenerateCount: typeof blockControls.regenerateCount === 'number' 
-      ? blockControls.regenerateCount 
-      : DEFAULT_CONFIG.blocks.regenerateCount,
+    blockCount:
+      typeof blockControls.blockCount === 'number'
+        ? blockControls.blockCount
+        : DEFAULT_CONFIG.blocks.count,
+    glitchProbability:
+      typeof blockControls.glitchProbability === 'number'
+        ? blockControls.glitchProbability
+        : DEFAULT_CONFIG.blocks.glitchProbability,
+    regenerateCount:
+      typeof blockControls.regenerateCount === 'number'
+        ? blockControls.regenerateCount
+        : DEFAULT_CONFIG.blocks.regenerateCount,
     blockPositionRange: blockControls.blockPositionRange || DEFAULT_CONFIG.blocks.positionRange,
     blockScaleRange: blockControls.blockScaleRange || DEFAULT_CONFIG.blocks.scaleRange,
     blockWidthRange: blockControls.blockWidthRange || DEFAULT_CONFIG.blocks.widthRange,
-    blockDistributionFactor: typeof blockControls.blockDistributionFactor === 'number'
-      ? blockControls.blockDistributionFactor
-      : DEFAULT_CONFIG.blocks.distributionFactor,
-    enableRotation: typeof blockControls.enableRotation === 'boolean' 
-      ? blockControls.enableRotation 
-      : DEFAULT_CONFIG.blocks.enableRotation,
-    pixelFontProbability: typeof blockControls.pixelFontProbability === 'number'
-      ? blockControls.pixelFontProbability
-      : DEFAULT_CONFIG.blocks.pixelFontProbability,
+    blockDistributionFactor:
+      typeof blockControls.blockDistributionFactor === 'number'
+        ? blockControls.blockDistributionFactor
+        : DEFAULT_CONFIG.blocks.distributionFactor,
+    rotateZProbability:
+      typeof blockControls.rotateZProbability === 'number'
+        ? blockControls.rotateZProbability
+        : DEFAULT_CONFIG.blocks.rotateZProbability,
+    pixelFontProbability:
+      typeof blockControls.pixelFontProbability === 'number'
+        ? blockControls.pixelFontProbability
+        : DEFAULT_CONFIG.blocks.pixelFontProbability,
     regenerateAllPositions: handleRegeneratePositions,
   }
 

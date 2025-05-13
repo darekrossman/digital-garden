@@ -1,10 +1,10 @@
 'use client'
 
-import ControlPanel from '@/components/ControlPanel'
-import LLMBlock from '@/components/LLMBlock'
-import WireframeCube from '@/components/WireframeCube'
-import WireframeSphere from '@/components/WireframeSphere'
+import ControlPanel from '@/components/control-panel'
+import WireframeCube from '@/components/cube'
+import LLMBlock from '@/components/llm-block'
 import Scrambler from '@/components/scrambler'
+import WireframeSphere from '@/components/sphere'
 import {
   generateInitialBlockStyles,
   generateRandomBlockStyle,
@@ -132,7 +132,7 @@ export default function Home() {
         blockScaleRange: controls.blockScaleRange,
         blockWidthRange: controls.blockWidthRange,
         blockDistributionFactor: controls.blockDistributionFactor,
-        enableRotation: controls.enableRotation,
+        rotateZProbability: controls.rotateZProbability,
         pixelFontProbability: controls.pixelFontProbability,
       }),
     )
@@ -143,7 +143,7 @@ export default function Home() {
     controls.blockScaleRange,
     controls.blockWidthRange,
     controls.blockDistributionFactor,
-    controls.enableRotation,
+    controls.rotateZProbability,
     controls.pixelFontProbability,
   ])
 
@@ -236,17 +236,13 @@ export default function Home() {
         onRegenerationStart={() => onBlockRegenerationStart(i)}
         content={JSON.stringify(defaultIntro)}
         style={{
-          maxHeight: '100vh',
           backgroundColor: style.bg,
-          position: 'absolute',
           top: style.top,
           left: style.left,
           zIndex: style.zIndex,
           width: `${style.width}vw`,
           fontFamily: token(`fonts.${style.fontFamily}` as Token),
-          transition: 'none',
           filter: `blur(${Math.max(0, (1 - style.scale) * 4)}px)`,
-          transformStyle: 'preserve-3d',
           transform: `scale(${style.scale}) rotateX(${style.rotateX}deg) rotateY(${style.rotateY}deg) rotateZ(${style.rotateZ}deg)`,
         }}
       />

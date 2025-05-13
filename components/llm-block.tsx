@@ -209,6 +209,9 @@ export default function LLMBlock({
     },
   ])
 
+  // Add a key to force LLMCanvas to rerun when regeneration is triggered
+  const [regenerateKey, setRegenerateKey] = useState(0)
+
   // Whenever this block is flagged for regeneration and isn't currently streaming
   useEffect(() => {
     if (shouldRegenerate && !isStreaming && !isGloballyPaused) {
@@ -220,7 +223,7 @@ export default function LLMBlock({
           content: buildPrompt(currentText),
         },
       ])
-
+      setRegenerateKey((k) => k + 1)
       // Use the glitch probability from controls
       if (Math.random() < glitchProbability) {
         setHasGlitchEffects(true)
@@ -235,10 +238,27 @@ export default function LLMBlock({
     isGloballyPaused,
   ])
 
+  // Compose static and incoming styles
+  const staticStyles: React.CSSProperties = {}
+  // Merge static styles with incoming style prop (incoming style takes precedence)
+  const mergedStyles: React.CSSProperties = {
+    ...staticStyles,
+    ...style,
+  }
+
   return (
-    <Box ref={blockRef} style={style} {...props}>
+    <Box
+      ref={blockRef}
+      maxHeight="100vh"
+      position="absolute"
+      transformOrigin="center"
+      transition="none"
+      style={mergedStyles}
+      {...props}
+    >
       <LLMCanvas
         messages={messages}
+        regenerateKey={regenerateKey}
         onComplete={(txt) => {
           setCurrentText(txt)
           setIsStreaming(false) // Mark streaming as done

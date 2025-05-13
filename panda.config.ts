@@ -19,6 +19,9 @@ export default defineConfig({
     extend: {
       tokens: {
         fonts: {
+          mono: {
+            value: 'monospace',
+          },
           pixel: {
             value: 'var(--fonts-pixel)',
           },

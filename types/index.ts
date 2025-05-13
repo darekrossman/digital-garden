@@ -57,7 +57,7 @@ export interface ControlValues {
   blockScaleRange: { min: number; max: number }
   blockWidthRange: { min: number; max: number }
   blockDistributionFactor: number
-  enableRotation: boolean
+  rotateZProbability: number
   pixelFontProbability: number
   regenerateAllPositions?: () => void
 }

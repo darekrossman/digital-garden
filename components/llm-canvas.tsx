@@ -10,9 +10,11 @@ import { useEffect, useRef, useState } from 'react'
 export function LLMCanvas({
   messages,
   onComplete,
+  regenerateKey,
 }: {
   messages?: ChatCompletionMessageParam[]
   onComplete?: (result: string) => void
+  regenerateKey?: string | number
 }) {
   // Keep track of both previous and current generation
   const [previousGeneration, setPreviousGeneration] = useState<string>('')
@@ -51,7 +53,7 @@ export function LLMCanvas({
 
   useEffect(() => {
     run()
-  }, [])
+  }, [regenerateKey])
 
   // Handle the word-by-word transition effect
   useEffect(() => {

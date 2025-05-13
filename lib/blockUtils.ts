@@ -11,9 +11,9 @@ export function generateRandomBlockStyle(controls: Partial<ControlValues> = {}):
   const blockScale = controls.blockScaleRange || DEFAULT_CONFIG.blocks.scaleRange
   const blockDistFactor =
     controls.blockDistributionFactor ?? DEFAULT_CONFIG.blocks.distributionFactor
-  const enableRot = controls.enableRotation ?? DEFAULT_CONFIG.blocks.enableRotation
   const blockWidth = controls.blockWidthRange || DEFAULT_CONFIG.blocks.widthRange
   const pixelFontProb = controls.pixelFontProbability ?? DEFAULT_CONFIG.blocks.pixelFontProbability
+  const rotateZProb = controls.rotateZProbability ?? DEFAULT_CONFIG.blocks.rotateZProbability
 
   return {
     top: `${getRandomInt(blockPosRange.min, blockPosRange.max)}%`,
@@ -26,7 +26,7 @@ export function generateRandomBlockStyle(controls: Partial<ControlValues> = {}):
     zIndex: getRandomInt(0, 9, { distribution: 'power', factor: 2 }),
     rotateX: 0,
     rotateY: 0,
-    rotateZ: enableRot && Math.random() < 0.1 ? 90 : 0,
+    rotateZ: Math.random() < rotateZProb ? 90 : 0,
     width: getRandomInt(blockWidth.min, blockWidth.max),
     bg: 'transparent',
     fontFamily: Math.random() < pixelFontProb ? 'pixel' : 'sans-serif',
