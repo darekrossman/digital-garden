@@ -5,7 +5,7 @@ import { getRandomInt } from '@/lib/helpers'
 import { buildPrompt } from '@/lib/promptUtils'
 import { Box } from '@/styled-system/jsx'
 import { MotionValue, motion, useScroll, useSpring, useTransform } from 'motion/react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 interface LLMBlockProps {
   index: number
@@ -20,6 +20,118 @@ interface LLMBlockProps {
 
 function useParallax(value: MotionValue<number>, distance: number, top?: number) {
   return useTransform(value, [0, 1], [top ?? 0, distance + (top ?? 0)])
+}
+
+// New hook for enhanced parallax effect that moves elements toward their nearest edge
+function useParallaxTowardsEdge(
+  scrollYProgress: MotionValue<number>,
+  elementRef: React.RefObject<HTMLElement>,
+  initialStyle?: React.CSSProperties,
+  maxDistance = 1500, // Maximum travel distance in pixels
+) {
+  // Create spring motion values for better animation feel - lower stiffness for smoother motion
+  const springX = useSpring(0, { damping: 25, stiffness: 100, mass: 0.8 })
+  const springY = useSpring(0, { damping: 25, stiffness: 100, mass: 0.8 })
+
+  // Effect to calculate the target position when element mounts or window resizes
+  useLayoutEffect(() => {
+    if (!elementRef.current) return
+
+    // Function to calculate vector towards nearest edge
+    const calculateEdgeVector = () => {
+      const element = elementRef.current
+      if (!element) return { dx: 0, dy: 0 }
+
+      // Get element's position and dimensions
+      const rect = element.getBoundingClientRect()
+      const elementCenterX = rect.left + rect.width / 2
+      const elementCenterY = rect.top + rect.height / 2
+
+      // Get viewport dimensions
+      const viewportWidth = window.innerWidth
+      const viewportHeight = window.innerHeight
+
+      // Calculate distances to each edge
+      const distToLeft = elementCenterX
+      const distToRight = viewportWidth - elementCenterX
+      const distToTop = elementCenterY
+      const distToBottom = viewportHeight - elementCenterY
+
+      // Find the nearest edge
+      const minDist = Math.min(distToLeft, distToRight, distToTop, distToBottom)
+
+      let dx = 0,
+        dy = 0
+
+      // Create a vector pointing to the nearest edge
+      if (minDist === distToLeft) {
+        // Nearest edge is left
+        dx = -1
+        dy = 0
+      } else if (minDist === distToRight) {
+        // Nearest edge is right
+        dx = 1
+        dy = 0
+      } else if (minDist === distToTop) {
+        // Nearest edge is top
+        dx = 0
+        dy = -1
+      } else {
+        // Nearest edge is bottom
+        dx = 0
+        dy = 1
+      }
+
+      // Adjust by a random angle for variation (within ±45° of the main direction)
+      const randomAngle = (Math.random() - 0.5) * (Math.PI / 2) // ±45 degrees
+      const cos = Math.cos(randomAngle)
+      const sin = Math.sin(randomAngle)
+
+      // Rotate the vector
+      const newDx = dx * cos - dy * sin
+      const newDy = dx * sin + dy * cos
+
+      // Adjust distance by scale if available in the style
+      const scale = extractScale(initialStyle?.transform)
+      const adjustedDistance = maxDistance * scale
+
+      return {
+        dx: newDx * adjustedDistance,
+        dy: newDy * adjustedDistance,
+      }
+    }
+
+    // Calculate the initial vector
+    let vector = calculateEdgeVector()
+
+    // Function to update springs based on scroll progress
+    const updateSprings = () => {
+      const progress = scrollYProgress.get()
+      springX.set(progress * vector.dx)
+      springY.set(progress * vector.dy)
+    }
+
+    // Initial update
+    updateSprings()
+
+    // Subscribe to scroll progress changes
+    const unsubscribeScroll = scrollYProgress.onChange(updateSprings)
+
+    // Recalculate on resize
+    const handleResize = () => {
+      vector = calculateEdgeVector()
+      updateSprings()
+    }
+
+    window.addEventListener('resize', handleResize)
+
+    return () => {
+      unsubscribeScroll()
+      window.removeEventListener('resize', handleResize)
+    }
+  }, [elementRef, initialStyle, scrollYProgress, maxDistance, springX, springY])
+
+  return { deltaX: springX, deltaY: springY }
 }
 
 // Convert a CSS `top` value (px, %, vh) into an absolute pixel amount so we can
@@ -88,38 +200,36 @@ export default function LLMBlock({
 }: LLMBlockProps) {
   const targetRef = useRef(null)
   const { scrollYProgress } = useScroll({
-    // target: targetRef,
     container: containerRef,
-    // layoutEffect: false,
   })
 
-  // Convert the supplied top style (which may be in % or vh) into pixels so the
-  // parallax hook adds the correct absolute offset.
-  const initialTop = topToPixels(style?.top as string | number)
+  // Reference to the motion div for parallax calculations
+  const motionDivRef = useRef<HTMLDivElement>(null)
 
-  // Adjust the parallax distance by any `scale(...)` transform so that smaller
-  // elements move proportionally slower (or faster, depending on your design).
-  const scale = extractScale(style?.transform)
-  const parallaxDistance = 375 * scale
+  // Use the enhanced parallax hook
+  const { deltaX, deltaY } = useParallaxTowardsEdge(
+    scrollYProgress,
+    motionDivRef as unknown as React.RefObject<HTMLElement>,
+    style,
+    2500, // Max distance - increased for more dramatic effect
+  )
 
-  const y = useParallax(scrollYProgress, parallaxDistance, initialTop)
-
-  // Keep track of the most recent generation for this block so we can feed it back in
-  const [currentText, setCurrentText] = useState(content)
   // Track if this block is currently streaming content
   const [isStreaming, setIsStreaming] = useState(false)
   // Track if this block should display glitch effects
   const [hasGlitchEffects, setHasGlitchEffects] = useState(false)
-  // Reference to the block element for applying glitch effects
-  const blockRef = useRef<HTMLDivElement>(null)
+  // Reference to the content box for applying glitch effects
+  const contentBoxRef = useRef<HTMLDivElement>(null)
   // Keep track of timeouts to clear them on unmount
   const timeoutsRef = useRef<number[]>([])
+  // Keep track of the most recent generation for this block so we can feed it back in
+  const [currentText, setCurrentText] = useState(content)
 
   // Function to apply glitch effects to the block
   const applyGlitchEffects = useCallback(() => {
-    if (!blockRef.current || !hasGlitchEffects) return
+    if (!contentBoxRef.current || !hasGlitchEffects) return
 
-    const element = blockRef.current
+    const element = contentBoxRef.current
     const originalTransform = style?.transform || ''
     const originalFilter = style?.filter || ''
     const originalOpacity = element.style.opacity || '1'
@@ -219,11 +329,11 @@ export default function LLMBlock({
       timeoutsRef.current.forEach(clearTimeout)
 
       // Ensure opacity is reset before unmounting
-      if (blockRef.current) {
-        blockRef.current.style.opacity = '1'
+      if (contentBoxRef.current) {
+        contentBoxRef.current.style.opacity = '1'
         // Reset transforms if they exist
         if (style?.transform) {
-          blockRef.current.style.transform = style.transform
+          contentBoxRef.current.style.transform = style.transform
         }
       }
     }
@@ -239,15 +349,15 @@ export default function LLMBlock({
         setHasGlitchEffects(false)
 
         // Explicitly reset opacity when glitch effects end
-        if (blockRef.current) {
-          blockRef.current.style.opacity = '1'
+        if (contentBoxRef.current) {
+          contentBoxRef.current.style.opacity = '1'
         }
       }, 15000) // Stop effects after 15 seconds
       timeoutsRef.current.push(disableTimeout)
     } else {
       // Ensure opacity is reset when glitch effects are turned off
-      if (blockRef.current) {
-        blockRef.current.style.opacity = '1'
+      if (contentBoxRef.current) {
+        contentBoxRef.current.style.opacity = '1'
       }
     }
   }, [hasGlitchEffects, applyGlitchEffects])
@@ -271,11 +381,11 @@ export default function LLMBlock({
       timeoutsRef.current = []
 
       // Ensure opacity and transforms are reset
-      if (blockRef.current) {
-        blockRef.current.style.opacity = '1'
+      if (contentBoxRef.current) {
+        contentBoxRef.current.style.opacity = '1'
         // Reset any transforms that might be stuck
         if (style?.transform) {
-          blockRef.current.style.transform = style.transform
+          contentBoxRef.current.style.transform = style.transform
         }
       }
 
@@ -307,15 +417,31 @@ export default function LLMBlock({
     <motion.div
       initial={{ visibility: 'hidden' }}
       animate={{ visibility: 'visible' }}
-      style={{ y }}
-      ref={blockRef}
+      style={{
+        x: deltaX,
+        y: deltaY,
+        position: 'absolute',
+        left: style?.left,
+        top: style?.top,
+        width: style?.width,
+        height: style?.height,
+      }}
+      ref={motionDivRef}
     >
       <Box
         maxHeight="100vh"
-        position="absolute"
+        position="relative"
         transformOrigin="center"
         transition="none"
-        style={style}
+        style={{
+          ...style,
+          position: 'relative',
+          left: undefined,
+          top: undefined,
+          width: '100%',
+          height: '100%',
+        }}
+        ref={contentBoxRef}
         {...props}
       >
         <LLMCanvas
@@ -326,8 +452,8 @@ export default function LLMBlock({
             setIsStreaming(false) // Mark streaming as done
 
             // Ensure opacity is reset after regeneration completes
-            if (blockRef.current) {
-              blockRef.current.style.opacity = '1'
+            if (contentBoxRef.current) {
+              contentBoxRef.current.style.opacity = '1'
             }
           }}
         />

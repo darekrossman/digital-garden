@@ -26,7 +26,7 @@ export const WIREFRAME_COLORS = [
 export const DEFAULT_CONFIG = {
   // Animation
   isPaused: false,
-  regenerateInterval: 3000,
+  regenerateInterval: 6000,
 
   // Wireframe
   wireframe: {
@@ -47,8 +47,8 @@ export const DEFAULT_CONFIG = {
   // Blocks
   blocks: {
     count: 16,
-    glitchProbability: 0.05,
-    regenerateCount: 4,
+    glitchProbability: 0.04,
+    regenerateCount: 6,
     positionRange: { min: -10, max: 90 },
     scaleRange: { min: 0.6, max: 2.6 },
     widthRange: { min: 20, max: 40 },

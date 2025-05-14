@@ -8,6 +8,8 @@ interface MarkdownProps {
   className?: string
 }
 
+const colors = ['blue', 'green', 'red', 'yellow', 'gray', 'black']
+
 /**
  * Convert markdown string to React components
  */
@@ -19,16 +21,32 @@ export function Markdown({ children }: MarkdownProps) {
           return <styled.h1 {...props}>{children}</styled.h1>
         },
         h2: ({ children, node, ...props }) => {
-          return <styled.h2 {...props}>{children}</styled.h2>
+          return (
+            <styled.h2 {...props} style={{ color: colors[getRandomInt(0, colors.length - 1)] }}>
+              {children}
+            </styled.h2>
+          )
         },
         h3: ({ children, node, ...props }) => {
           return <styled.h3 {...props}>{children}</styled.h3>
         },
         h4: ({ children, node, ...props }) => {
-          return <styled.h4 {...props}>{children}</styled.h4>
+          return (
+            <styled.h4 {...props} style={{ color: colors[getRandomInt(0, colors.length - 1)] }}>
+              {children}
+            </styled.h4>
+          )
         },
         h5: ({ children, node, ...props }) => {
           return <styled.h5 {...props}>{children}</styled.h5>
+        },
+
+        p: ({ children, node, ...props }) => {
+          return (
+            <styled.p {...props} style={{ opacity: Math.random() * 1 }}>
+              {children}
+            </styled.p>
+          )
         },
 
         pre: ({ children, node, ...props }) => {
@@ -48,7 +66,6 @@ export function Markdown({ children }: MarkdownProps) {
         },
 
         code: ({ children }) => {
-          const colors = ['blue', 'green', 'red', 'yellow', 'gray', 'black']
           const bg = colors[getRandomInt(0, colors.length - 1)]
           const fg = bg === 'yellow' ? 'black' : 'white'
 
