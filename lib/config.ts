@@ -1,4 +1,4 @@
-import { BlockStyle, ControlValues, WireframeStyle } from '../types'
+import { BlockStyle, WireframeStyle } from '../types'
 
 /**
  * Predefined colors for wireframe objects
@@ -30,7 +30,7 @@ export const DEFAULT_CONFIG = {
 
   // Wireframe
   wireframe: {
-    type: 'cube' as const,
+    type: null,
     segments: 10,
     glitchIntensity: 1,
     wireframeColor: '#ffffff',
@@ -94,32 +94,5 @@ export const getDefaultWireframeStyle = (): WireframeStyle => {
     width: '50px',
     height: '50px',
     scale: 1,
-  }
-}
-
-/**
- * Get default control values
- */
-export const getDefaultControlValues = (): ControlValues => {
-  return {
-    isPaused: DEFAULT_CONFIG.isPaused,
-    regenerateInterval: DEFAULT_CONFIG.regenerateInterval,
-    wireframeType: DEFAULT_CONFIG.wireframe.type,
-    wireframeSegments: DEFAULT_CONFIG.wireframe.segments,
-    wireframeColor: DEFAULT_CONFIG.wireframe.wireframeColor,
-    glitchIntensity: DEFAULT_CONFIG.wireframe.glitchIntensity,
-    blockCount: DEFAULT_CONFIG.blocks.count,
-    glitchProbability: DEFAULT_CONFIG.blocks.glitchProbability,
-    regenerateCount: DEFAULT_CONFIG.blocks.regenerateCount,
-    blockPositionRange: DEFAULT_CONFIG.blocks.positionRange,
-    blockScaleRange: DEFAULT_CONFIG.blocks.scaleRange,
-    blockWidthRange: DEFAULT_CONFIG.blocks.widthRange,
-    blockDistributionFactor: DEFAULT_CONFIG.blocks.distributionFactor,
-    rotateZProbability: DEFAULT_CONFIG.blocks.rotateZProbability,
-    pixelFontProbability: DEFAULT_CONFIG.blocks.pixelFontProbability,
-    // These functions will be replaced by actual implementations
-    regenerateAll: () => {},
-    randomizeWireframe: () => {},
-    regenerateAllPositions: () => {},
   }
 }

@@ -1,19 +1,18 @@
-import { BlockStyle, ControlValues } from '@/types'
+import { BlockStyle } from '@/types'
 import { DEFAULT_CONFIG } from './config'
 import { getRandomInt } from './helpers'
 
 /**
  * Generates a random style for a block based on control values
  */
-export function generateRandomBlockStyle(controls: Partial<ControlValues> = {}): BlockStyle {
+export function generateRandomBlockStyle(): BlockStyle {
   // Extract control values with defaults from central config
-  const blockPosRange = controls.blockPositionRange || DEFAULT_CONFIG.blocks.positionRange
-  const blockScale = controls.blockScaleRange || DEFAULT_CONFIG.blocks.scaleRange
-  const blockDistFactor =
-    controls.blockDistributionFactor ?? DEFAULT_CONFIG.blocks.distributionFactor
-  const blockWidth = controls.blockWidthRange || DEFAULT_CONFIG.blocks.widthRange
-  const pixelFontProb = controls.pixelFontProbability ?? DEFAULT_CONFIG.blocks.pixelFontProbability
-  const rotateZProb = controls.rotateZProbability ?? DEFAULT_CONFIG.blocks.rotateZProbability
+  const blockPosRange = DEFAULT_CONFIG.blocks.positionRange
+  const blockScale = DEFAULT_CONFIG.blocks.scaleRange
+  const blockDistFactor = DEFAULT_CONFIG.blocks.distributionFactor
+  const blockWidth = DEFAULT_CONFIG.blocks.widthRange
+  const pixelFontProb = DEFAULT_CONFIG.blocks.pixelFontProbability
+  const rotateZProb = DEFAULT_CONFIG.blocks.rotateZProbability
 
   return {
     top: `${getRandomInt(blockPosRange.min, blockPosRange.max)}%`,
