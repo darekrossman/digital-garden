@@ -5,7 +5,7 @@ import { generate } from '@/lib/inference'
 import { Box, Stack } from '@/styled-system/jsx'
 import { readStreamableValue } from 'ai/rsc'
 import { ChatCompletionMessageParam } from 'openai/src/resources.js'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 export function LLMCanvas({
   messages,
@@ -25,8 +25,12 @@ export function LLMCanvas({
   // Reference to store the full generated text
   const fullGenerationRef = useRef<string>('')
 
-  const run = async () => {
+  // Reference to prevent double effect execution in development mode
+  const effectRanRef = useRef<string | number | undefined>(undefined)
+
+  const run = useCallback(async () => {
     if (!messages) return
+    console.log('run', regenerateKey)
 
     // Store the current text as previous before starting a new generation
     setPreviousGeneration(fullGenerationRef.current)
@@ -49,11 +53,17 @@ export function LLMCanvas({
     } finally {
       setIsTransitioning(false)
     }
-  }
+  }, [messages, onComplete, regenerateKey])
 
   useEffect(() => {
+    // Skip if this effect has already run for this regenerateKey
+    if (effectRanRef.current === regenerateKey) return
+
+    // Store current regenerateKey to prevent re-running
+    effectRanRef.current = regenerateKey
+
     run()
-  }, [regenerateKey])
+  }, [regenerateKey, run])
 
   // Handle the word-by-word transition effect
   useEffect(() => {

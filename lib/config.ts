@@ -26,13 +26,13 @@ export const WIREFRAME_COLORS = [
 export const DEFAULT_CONFIG = {
   // Animation
   isPaused: false,
-  regenerateInterval: 7000,
+  regenerateInterval: 3000,
 
   // Wireframe
   wireframe: {
     type: 'cube' as const,
     segments: 10,
-    glitchIntensity: 0.25,
+    glitchIntensity: 1,
     wireframeColor: '#ffffff',
     colors: WIREFRAME_COLORS, // Available colors for random selection
     positionRanges: {
@@ -41,19 +41,19 @@ export const DEFAULT_CONFIG = {
       size: [50, 250],
       scale: [80, 150],
     },
-    typeWeights: { cube: 0.33, sphere: 0.33, none: 0.34 }, // Default weights for types
+    typeWeights: { cube: 0.1, sphere: 0.1, none: 0.8 }, // Default weights for types
   },
 
   // Blocks
   blocks: {
-    count: 10,
-    glitchProbability: 0.1,
-    regenerateCount: 1,
-    positionRange: { min: -10, max: 80 },
+    count: 16,
+    glitchProbability: 0.05,
+    regenerateCount: 4,
+    positionRange: { min: -10, max: 90 },
     scaleRange: { min: 0.6, max: 2.6 },
     widthRange: { min: 20, max: 40 },
     distributionFactor: 3,
-    rotateZProbability: 0.1,
+    rotateZProbability: 0.15,
     pixelFontProbability: 0.3,
   },
 }

@@ -10,7 +10,7 @@ import {
   generateRandomBlockStyle,
   regenerateBlocks,
 } from '@/lib/blockUtils'
-import { DEFAULT_CONFIG, getDefaultWireframeStyle } from '@/lib/config'
+import { DEFAULT_CONFIG } from '@/lib/config'
 import { defaultIntro } from '@/lib/constants'
 import { createClearableInterval } from '@/lib/helpers'
 import { usePageControls } from '@/lib/hooks/usePageControls'
@@ -18,12 +18,15 @@ import { generateRandomWireframeStyle, getWireframePositionStyle } from '@/lib/w
 import { Box, Center, Stack, styled } from '@/styled-system/jsx'
 import { Token, token } from '@/styled-system/tokens'
 import { BlockStyle, WireframeStyle } from '@/types'
+import { MotionValue, motion, useScroll, useSpring, useTransform } from 'motion/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 /**
  * Main page component
  */
 export default function Home() {
+  const containerRef = useRef<HTMLDivElement>(null)
+
   // Use centralized config for block count
   const blockCount = DEFAULT_CONFIG.blocks.count
 
@@ -226,10 +229,14 @@ export default function Home() {
       fontFamily: 'sans-serif',
     }
 
+    const filter = `blur(${style.scale < 1 ? Math.floor((1 - style.scale) * 5) : 0}px)`
+
+    console.log(style.scale, filter)
     return (
       <LLMBlock
         key={i}
         index={i}
+        containerRef={containerRef}
         shouldRegenerate={blocksToRegenerate.has(i)}
         glitchProbability={controls.glitchProbability}
         isGloballyPaused={controls.isPaused}
@@ -242,7 +249,7 @@ export default function Home() {
           zIndex: style.zIndex,
           width: `${style.width}vw`,
           fontFamily: token(`fonts.${style.fontFamily}` as Token),
-          filter: `blur(${Math.max(0, (1 - style.scale) * 4)}px)`,
+          filter,
           transform: `scale(${style.scale}) rotateX(${style.rotateX}deg) rotateY(${style.rotateY}deg) rotateZ(${style.rotateZ}deg)`,
         }}
       />
@@ -275,15 +282,29 @@ export default function Home() {
 
           {/* Center intro - fixed position */}
           <Box
+            ref={containerRef}
             position="absolute"
             top="50%"
             left="50%"
             transform="translate(-50%, -50%)"
             width="375px"
             height="375px"
+            overflow="scroll"
             zIndex="20"
           >
             <Center bg="black" color="white" h="full">
+              <Stack w="70%" textWrap="balance">
+                <styled.h1>{defaultIntro.heading}</styled.h1>
+                {defaultIntro.paragraphs.map((paragraph, i) => (
+                  <styled.p key={i}>
+                    {paragraph}
+                    <Scrambler>.</Scrambler>
+                  </styled.p>
+                ))}
+              </Stack>
+            </Center>
+
+            <Center bg="red" color="white" h="full">
               <Stack w="70%" textWrap="balance">
                 <styled.h1>{defaultIntro.heading}</styled.h1>
                 {defaultIntro.paragraphs.map((paragraph, i) => (

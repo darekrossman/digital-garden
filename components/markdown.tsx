@@ -39,7 +39,7 @@ export function Markdown({ children }: MarkdownProps) {
               fontFamily="mono"
               bg="var(--prebg)"
               style={{
-                ['--prebg' as string]: Math.random() < 0.1 ? 'black' : 'transprent',
+                ['--prebg' as string]: Math.random() < 0.1 ? 'black' : 'transparent',
               }}
             >
               {children}

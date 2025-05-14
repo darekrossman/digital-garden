@@ -42,7 +42,7 @@ export const adjectives = [
  * Default intro text for the portfolio
  */
 export const defaultIntro = {
-  heading: "I'm Darek Rossman",
+  heading: "I'm Darek.",
   paragraphs: [
     "I live in St. Pete, FL where I've been working on physical and digital creations for the last two decades",
     'I adapt to complexity and I strive for simplicity. I design for clarity and I build for scale. I lead with curiosity and I ask deeper questions',
@@ -54,7 +54,8 @@ export const defaultIntro = {
  */
 export const basePromptTemplates = [
   (adjective: string) => `Rewrite the following text in a ${adjective} way.`,
-  (adjective: string) => `Rewrite the following text in a ${adjective} way, and scramble the name of the person mentioned in strange ways, replacing some letters entirely`,
+  (adjective: string) =>
+    `Rewrite the following text in a ${adjective} way, and scramble the name of the person mentioned in strange ways, replacing some letters entirely`,
   (adjective: string) => `Generate ${adjective} ASCII art.`,
 ]
 
