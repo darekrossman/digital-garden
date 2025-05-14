@@ -1,12 +1,19 @@
 import './globals.css'
-import { css } from '@/styled-system/css'
+import { css, cx } from '@/styled-system/css'
 import type { Metadata } from 'next'
-import { Silkscreen as PixelFont } from 'next/font/google'
+import { Silkscreen } from 'next/font/google'
+import { Major_Mono_Display } from 'next/font/google'
 
-const pfont = PixelFont({
+const silkscreen = Silkscreen({
   weight: ['400'],
   subsets: ['latin'],
   variable: '--fonts-pixel',
+})
+
+const majorMonoDisplay = Major_Mono_Display({
+  weight: ['400'],
+  subsets: ['latin'],
+  variable: '--fonts-major-mono',
 })
 
 export const metadata: Metadata = {
@@ -20,7 +27,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className={pfont.variable}>
+    <html lang="en" className={cx(silkscreen.variable, majorMonoDisplay.variable)}>
       <body className={css({ position: 'relative' })}>{children}</body>
     </html>
   )

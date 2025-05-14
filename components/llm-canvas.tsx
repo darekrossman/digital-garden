@@ -25,12 +25,15 @@ export function LLMCanvas({
   // Reference to store the full generated text
   const fullGenerationRef = useRef<string>('')
 
+  // Throttle interval for streaming updates (ms)
+  const UPDATE_INTERVAL_MS = 100
+  const lastUpdateTimeRef = useRef<number>(0)
+
   // Reference to prevent double effect execution in development mode
   const effectRanRef = useRef<string | number | undefined>(undefined)
 
   const run = useCallback(async () => {
     if (!messages) return
-    console.log('run', regenerateKey)
 
     // Store the current text as previous before starting a new generation
     setPreviousGeneration(fullGenerationRef.current)
@@ -44,8 +47,16 @@ export function LLMCanvas({
       for await (const delta of readStreamableValue(output)) {
         newText += delta
         fullGenerationRef.current = newText
-        setCurrentGeneration(newText)
+
+        const now = Date.now()
+        if (now - lastUpdateTimeRef.current >= UPDATE_INTERVAL_MS) {
+          setCurrentGeneration(newText)
+          lastUpdateTimeRef.current = now
+        }
       }
+
+      // Ensure the final text is rendered
+      setCurrentGeneration(newText)
 
       if (onComplete) onComplete(fullGenerationRef.current)
     } catch (error) {
@@ -56,10 +67,7 @@ export function LLMCanvas({
   }, [messages, onComplete, regenerateKey])
 
   useEffect(() => {
-    // Skip if this effect has already run for this regenerateKey
     if (effectRanRef.current === regenerateKey) return
-
-    // Store current regenerateKey to prevent re-running
     effectRanRef.current = regenerateKey
 
     run()

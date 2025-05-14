@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 
-interface WireframeSphereProps {
+interface SphereProps {
   // Control the number of segments (vertices)
   widthSegments?: number
   heightSegments?: number
@@ -13,14 +13,14 @@ interface WireframeSphereProps {
   glitchIntensity?: number // New prop to control glitch intensity (0-1)
 }
 
-export default function WireframeSphere({
+export default function Sphere({
   widthSegments = 16,
   heightSegments = 12,
   wireframeColor = 0x000000,
   faceColor = 0xffffff,
   faceOpacity = 0.1,
   glitchIntensity = 0.5, // Default glitch intensity
-}: WireframeSphereProps) {
+}: SphereProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<THREE.Scene | null>(null)
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null)

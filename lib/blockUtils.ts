@@ -1,18 +1,17 @@
 import { BlockStyle } from '@/types'
-import { DEFAULT_CONFIG } from './config'
-import { getRandomInt } from './helpers'
+import { defaultConfig } from './config'
+import { getRandomFontFamily, getRandomInt } from './helpers'
 
 /**
  * Generates a random style for a block based on control values
  */
 export function generateRandomBlockStyle(): BlockStyle {
   // Extract control values with defaults from central config
-  const blockPosRange = DEFAULT_CONFIG.blocks.positionRange
-  const blockScale = DEFAULT_CONFIG.blocks.scaleRange
-  const blockDistFactor = DEFAULT_CONFIG.blocks.distributionFactor
-  const blockWidth = DEFAULT_CONFIG.blocks.widthRange
-  const pixelFontProb = DEFAULT_CONFIG.blocks.pixelFontProbability
-  const rotateZProb = DEFAULT_CONFIG.blocks.rotateZProbability
+  const blockPosRange = defaultConfig.blocks.positionRange
+  const blockScale = defaultConfig.blocks.scaleRange
+  const blockDistFactor = defaultConfig.blocks.distributionFactor
+  const blockWidth = defaultConfig.blocks.widthRange
+  const rotateZProb = defaultConfig.blocks.rotateZProbability
 
   return {
     top: `${getRandomInt(blockPosRange.min, blockPosRange.max)}%`,
@@ -28,7 +27,7 @@ export function generateRandomBlockStyle(): BlockStyle {
     rotateZ: Math.random() < rotateZProb ? 90 : 0,
     width: getRandomInt(blockWidth.min, blockWidth.max),
     bg: 'transparent',
-    fontFamily: Math.random() < pixelFontProb ? 'pixel' : 'sans-serif',
+    fontFamily: getRandomFontFamily({ pixel: 0.1, mono: 0.9 }),
   }
 }
 
@@ -63,7 +62,7 @@ export function getBlockTransform(style: BlockStyle): string {
  * Creates an array of random block styles
  */
 export function generateInitialBlockStyles(
-  count: number = DEFAULT_CONFIG.blocks.count,
+  count: number = defaultConfig.blocks.count,
   generator: () => BlockStyle = () => generateRandomBlockStyle(),
 ): BlockStyle[] {
   const styles: BlockStyle[] = []

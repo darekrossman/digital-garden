@@ -1,6 +1,21 @@
 /**
- * Constants for the portfolio application
+ * Predefined colors for wireframe objects
  */
+export const wireframeColors = [
+  0xff0000, // Red
+  0x00ff00, // Green
+  0x0000ff, // Blue
+  0xffff00, // Yellow
+  0xff00ff, // Magenta
+  0x00ffff, // Cyan
+  0xff8000, // Orange
+  0x8000ff, // Purple
+  0x0080ff, // Light Blue
+  0x8fff00, // Lime
+  0xff0080, // Hot Pink
+  0x000000, // Black
+  0xffffff, // White
+]
 
 /**
  * List of adjectives used for generating creative text prompts

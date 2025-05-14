@@ -1,6 +1,7 @@
-import { getRandomInt } from '@/lib/helpers'
+import { getRandomFontFamily, getRandomInt } from '@/lib/helpers'
 import { css } from '@/styled-system/css'
 import { styled } from '@/styled-system/jsx'
+import { Token, token } from '@/styled-system/tokens'
 import ReactMarkdown from 'react-markdown'
 
 interface MarkdownProps {
@@ -22,7 +23,14 @@ export function Markdown({ children }: MarkdownProps) {
         },
         h2: ({ children, node, ...props }) => {
           return (
-            <styled.h2 {...props} style={{ color: colors[getRandomInt(0, colors.length - 1)] }}>
+            <styled.h2
+              {...props}
+              style={{
+                fontFamily: token(
+                  `fonts.${getRandomFontFamily({ majorMono: 0.2, mono: 0.8 })}` as Token,
+                ),
+              }}
+            >
               {children}
             </styled.h2>
           )
@@ -32,7 +40,11 @@ export function Markdown({ children }: MarkdownProps) {
         },
         h4: ({ children, node, ...props }) => {
           return (
-            <styled.h4 {...props} style={{ color: colors[getRandomInt(0, colors.length - 1)] }}>
+            <styled.h4
+              {...props}
+              fontFamily="pixel"
+              style={{ color: colors[getRandomInt(0, colors.length - 1)] }}
+            >
               {children}
             </styled.h4>
           )
@@ -43,7 +55,7 @@ export function Markdown({ children }: MarkdownProps) {
 
         p: ({ children, node, ...props }) => {
           return (
-            <styled.p {...props} style={{ opacity: Math.random() * 1 }}>
+            <styled.p {...props} style={{ opacity: Math.random() * 0.2 + 1 }}>
               {children}
             </styled.p>
           )
@@ -57,7 +69,7 @@ export function Markdown({ children }: MarkdownProps) {
               fontFamily="mono"
               bg="var(--prebg)"
               style={{
-                ['--prebg' as string]: Math.random() < 0.1 ? 'black' : 'transparent',
+                ['--prebg' as string]: Math.random() < 0.05 ? 'black' : 'transparent',
               }}
             >
               {children}

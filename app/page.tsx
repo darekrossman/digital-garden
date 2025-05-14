@@ -2,6 +2,7 @@
 
 import WireframeCube from '@/components/cube'
 import LLMBlock from '@/components/llm-block'
+import { RandomGeometry } from '@/components/random-geometry'
 import Scrambler from '@/components/scrambler'
 import WireframeSphere from '@/components/sphere'
 import {
@@ -9,10 +10,10 @@ import {
   generateRandomBlockStyle,
   regenerateBlocks,
 } from '@/lib/blockUtils'
-import { DEFAULT_CONFIG } from '@/lib/config'
+import { defaultConfig } from '@/lib/config'
 import { defaultIntro } from '@/lib/constants'
+import { generateRandomWireframeStyle, getWireframePositionStyle } from '@/lib/geometry-utils'
 import { createClearableInterval } from '@/lib/helpers'
-import { generateRandomWireframeStyle, getWireframePositionStyle } from '@/lib/wireframeUtils'
 import { Box, Center, Stack, styled } from '@/styled-system/jsx'
 import { Token, token } from '@/styled-system/tokens'
 import { BlockStyle, WireframeStyle } from '@/types'
@@ -22,26 +23,14 @@ import { useCallback, useEffect, useRef, useState } from 'react'
  * Main page component
  */
 export default function Home() {
-  const blockCount = DEFAULT_CONFIG.blocks.count
+  const blockCount = defaultConfig.blocks.count
   const containerRef = useRef<HTMLDivElement>(null)
   const [blocksToRegenerate, setBlocksToRegenerate] = useState(new Set<number>())
   const [blockStyles, setBlockStyles] = useState<BlockStyle[]>([])
-  const [isPaused, setIsPaused] = useState(DEFAULT_CONFIG.isPaused)
+  const [isPaused, setIsPaused] = useState(defaultConfig.isPaused)
 
   // Interval reference for regeneration timing
   const intervalRef = useRef<ReturnType<typeof createClearableInterval> | null>(null)
-
-  // State for wireframe positioning and properties - use default from config
-  const [wireframeStyle, setWireframeStyle] = useState<WireframeStyle>({
-    top: '0',
-    left: '0',
-    width: '50px',
-    height: '50px',
-    scale: 1,
-    type: DEFAULT_CONFIG.wireframe.type,
-    segments: DEFAULT_CONFIG.wireframe.segments,
-    wireframeColor: DEFAULT_CONFIG.wireframe.wireframeColor,
-  })
 
   // Callback for when a block starts regeneration
   const onBlockRegenerationStart = useCallback((blockIndex: number) => {
@@ -88,10 +77,9 @@ export default function Home() {
     }
 
     intervalRef.current = createClearableInterval(() => {
-      const count = Math.min(DEFAULT_CONFIG.blocks.regenerateCount, blockCount)
+      const count = Math.min(defaultConfig.blocks.regenerateCount, blockCount)
       setBlocksToRegenerate((current) => regenerateBlocks(current, count, blockCount))
-      setWireframeStyle(generateRandomWireframeStyle())
-    }, DEFAULT_CONFIG.regenerateInterval)
+    }, defaultConfig.regenerateInterval)
 
     return () => {
       if (intervalRef.current) {
@@ -108,12 +96,9 @@ export default function Home() {
       left: '0%',
       scale: 1,
       zIndex: 0,
-      rotateX: 0,
-      rotateY: 0,
       rotateZ: 0,
-      width: 30,
+      width: '30vw',
       bg: 'transparent',
-      fontFamily: 'sans-serif',
     }
 
     const filter = `blur(${style.scale < 1 ? Math.floor((1 - style.scale) * 5) : 0}px)`
@@ -124,8 +109,7 @@ export default function Home() {
         index={i}
         containerRef={containerRef}
         shouldRegenerate={blocksToRegenerate.has(i)}
-        glitchProbability={DEFAULT_CONFIG.blocks.glitchProbability}
-        isGloballyPaused={isPaused}
+        isPaused={isPaused}
         onRegenerationStart={() => onBlockRegenerationStart(i)}
         content={JSON.stringify(defaultIntro)}
         style={{
@@ -143,68 +127,50 @@ export default function Home() {
   }
 
   return (
-    <>
-      <Box h="100dvh" position="relative" display="flex" flexDirection="column">
-        {/* Positioned blocks */}
-        <Box position="relative" h="100%" overflow="hidden">
-          {blockStyles.length > 0 &&
-            Array.from({ length: blockCount }).map((_, i) => renderBlock(i))}
+    <Box h="100dvh" position="relative" display="flex" flexDirection="column">
+      {/* Positioned blocks */}
+      <Box position="relative" h="100%" overflow="hidden">
+        {blockStyles.length > 0 && Array.from({ length: blockCount }).map((_, i) => renderBlock(i))}
 
-          {/* Center intro - fixed position */}
-          <Box
-            ref={containerRef}
-            position="absolute"
-            top="50%"
-            left="50%"
-            transform="translate(-50%, -50%)"
-            width="375px"
-            height="375px"
-            overflow="scroll"
-            zIndex="20"
-          >
-            <Center bg="black" color="white" h="full">
-              <Stack w="70%" textWrap="balance">
-                <styled.h1>{defaultIntro.heading}</styled.h1>
-                {defaultIntro.paragraphs.map((paragraph, i) => (
-                  <styled.p key={i}>
-                    {paragraph}
-                    <Scrambler>.</Scrambler>
-                  </styled.p>
-                ))}
-              </Stack>
-            </Center>
-
-            <Center bg="red" color="white" h="full">
-              <Stack w="70%" textWrap="balance">
-                <styled.h1>{defaultIntro.heading}</styled.h1>
-                {defaultIntro.paragraphs.map((paragraph, i) => (
-                  <styled.p key={i}>
-                    {paragraph}
-                    <Scrambler>.</Scrambler>
-                  </styled.p>
-                ))}
-              </Stack>
-            </Center>
-          </Box>
-
-          {/* Render either cube or sphere based on wireframeStyle */}
-          <Box position="absolute" style={getWireframePositionStyle(wireframeStyle)} zIndex="-1">
-            {wireframeStyle.type === 'cube' ? (
-              <WireframeCube
-                wireframeColor={wireframeStyle.wireframeColor}
-                glitchIntensity={DEFAULT_CONFIG.wireframe.glitchIntensity}
-              />
-            ) : wireframeStyle.type === 'sphere' ? (
-              <WireframeSphere
-                widthSegments={wireframeStyle.segments}
-                heightSegments={wireframeStyle.segments}
-                wireframeColor={wireframeStyle.wireframeColor}
-                glitchIntensity={DEFAULT_CONFIG.wireframe.glitchIntensity}
-              />
-            ) : null}
-          </Box>
+        {/* Center intro - fixed position */}
+        <Box
+          ref={containerRef}
+          position="absolute"
+          top="50%"
+          left="50%"
+          transform="translate(-50%, -50%)"
+          width="375px"
+          height="375px"
+          overflow="scroll"
+          zIndex="20"
+        >
+          <Center bg="black" color="white" h="full">
+            <Stack w="70%" textWrap="balance">
+              <styled.h1 fontFamily="majorMono">{defaultIntro.heading}</styled.h1>
+              {defaultIntro.paragraphs.map((paragraph, i) => (
+                <styled.p key={i}>
+                  {paragraph}
+                  <Scrambler>.</Scrambler>
+                </styled.p>
+              ))}
+            </Stack>
+          </Center>
         </Box>
+
+        <RandomGeometry isPaused={isPaused} />
       </Box>
-    </>
+
+      <Box pos="fixed" bottom="0" right="0" zIndex="99999">
+        <styled.button
+          bg="black"
+          color="white"
+          py="1"
+          px="2"
+          onClick={() => setIsPaused(!isPaused)}
+        >
+          {isPaused ? 'resume' : 'pause'}
+        </styled.button>
+      </Box>
+    </Box>
   )
 }

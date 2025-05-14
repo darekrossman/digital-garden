@@ -112,7 +112,10 @@ export function getRandomArrayItem<T>(array: T[]): T {
 /**
  * Create an interval that can be easily cleared
  */
-export function createClearableInterval(callback: () => void, ms: number): {
+export function createClearableInterval(
+  callback: () => void,
+  ms: number,
+): {
   clear: () => void
   id: NodeJS.Timeout
 } {
@@ -135,4 +138,21 @@ export function clearAllTimeouts(timeouts: (NodeJS.Timeout | number)[]): void {
  */
 export function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max)
+}
+
+/**
+ * Returns a random font family key based on weighting (e.g., { pixel: 0.1, majorMono: 0.1, mono: 0.8 })
+ */
+export function getRandomFontFamily(weighting: Record<string, number>): string {
+  const keys = Object.keys(weighting)
+  const weights = keys.map((k) => weighting[k])
+  const total = weights.reduce((sum, w) => sum + w, 0)
+  const r = Math.random() * total
+  let acc = 0
+  for (let i = 0; i < keys.length; i++) {
+    acc += weights[i]
+    if (r < acc) return keys[i]
+  }
+  // fallback (should not happen)
+  return keys[0]
 }

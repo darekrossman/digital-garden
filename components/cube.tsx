@@ -3,19 +3,19 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 
-interface WireframeCubeProps {
+interface CubeProps {
   wireframeColor?: number | string
   faceColor?: number | string
   faceOpacity?: number
   glitchIntensity?: number // New prop to control glitch intensity (0-1)
 }
 
-export default function WireframeCube({
+export default function Cube({
   wireframeColor = 0x000000,
   faceColor = 0xffffff,
   faceOpacity = 0.1,
   glitchIntensity = 0.5, // Default glitch intensity
-}: WireframeCubeProps) {
+}: CubeProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<THREE.Scene | null>(null)
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null)

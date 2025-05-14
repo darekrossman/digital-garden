@@ -22,6 +22,9 @@ export default defineConfig({
           mono: {
             value: 'monospace',
           },
+          majorMono: {
+            value: 'var(--fonts-major-mono)',
+          },
           pixel: {
             value: 'var(--fonts-pixel)',
           },
