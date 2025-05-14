@@ -22,9 +22,8 @@ export const defaultConfig = {
 
   // Blocks
   blocks: {
-    count: 4,
-
-    regenerateCount: 1,
+    count: 12,
+    regenerateCount: 4,
     positionRange: { min: -10, max: 90 },
     scaleRange: { min: 0.6, max: 2.6 },
     widthRange: { min: 20, max: 40 },

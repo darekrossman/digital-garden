@@ -1,6 +1,7 @@
 'use client'
 
 import WireframeCube from '@/components/cube'
+import { FeatureBlock } from '@/components/feature-block'
 import LLMBlock from '@/components/llm-block'
 import { RandomGeometry } from '@/components/random-geometry'
 import Scrambler from '@/components/scrambler'
@@ -130,32 +131,9 @@ export default function Home() {
     <Box h="100dvh" position="relative" display="flex" flexDirection="column">
       {/* Positioned blocks */}
       <Box position="relative" h="100%" overflow="hidden">
-        {blockStyles.length > 0 && Array.from({ length: blockCount }).map((_, i) => renderBlock(i))}
+        {/* {blockStyles.length > 0 && Array.from({ length: blockCount }).map((_, i) => renderBlock(i))} */}
 
-        {/* Center intro - fixed position */}
-        <Box
-          ref={containerRef}
-          position="absolute"
-          top="50%"
-          left="50%"
-          transform="translate(-50%, -50%)"
-          width="375px"
-          height="375px"
-          overflow="scroll"
-          zIndex="20"
-        >
-          <Center bg="black" color="white" h="full">
-            <Stack w="70%" textWrap="balance">
-              <styled.h1 fontFamily="majorMono">{defaultIntro.heading}</styled.h1>
-              {defaultIntro.paragraphs.map((paragraph, i) => (
-                <styled.p key={i}>
-                  {paragraph}
-                  <Scrambler>.</Scrambler>
-                </styled.p>
-              ))}
-            </Stack>
-          </Center>
-        </Box>
+        <FeatureBlock ref={containerRef} isPaused={isPaused} />
 
         <RandomGeometry isPaused={isPaused} />
       </Box>
