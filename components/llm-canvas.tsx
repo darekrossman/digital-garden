@@ -26,11 +26,8 @@ export function LLMCanvas({
   const fullGenerationRef = useRef<string>('')
 
   // Throttle interval for streaming updates (ms)
-  const UPDATE_INTERVAL_MS = 100
+  const UPDATE_INTERVAL_MS = 70
   const lastUpdateTimeRef = useRef<number>(0)
-
-  // Reference to prevent double effect execution in development mode
-  const effectRanRef = useRef<string | number | undefined>(undefined)
 
   const run = useCallback(async () => {
     if (!messages) return
@@ -41,6 +38,7 @@ export function LLMCanvas({
     setIsTransitioning(true)
 
     try {
+      console.log('generate text')
       const { output } = await generate(messages)
       let newText = ''
 
@@ -67,11 +65,8 @@ export function LLMCanvas({
   }, [messages, onComplete, regenerateKey])
 
   useEffect(() => {
-    if (effectRanRef.current === regenerateKey) return
-    effectRanRef.current = regenerateKey
-
     run()
-  }, [regenerateKey, run])
+  }, [regenerateKey])
 
   // Handle the word-by-word transition effect
   useEffect(() => {

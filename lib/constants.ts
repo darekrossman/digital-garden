@@ -55,7 +55,7 @@ export const adjectives = [
 
 export const symbolicObjects = [
   'brain',
-  'skeleton',
+  'skull',
   'anchor',
   'space shuttle',
   'circuit board',
@@ -91,9 +91,9 @@ export const symbolicObjects = [
   'fractal',
   'neural net',
   'glass prism',
-  'quantum dice',
   'welding mask',
-  'bridge',
+  'sound wave',
+  'swiss army knife',
 ]
 
 /**

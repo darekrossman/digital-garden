@@ -1,3 +1,5 @@
+'use client'
+
 import { defaultIntro } from '@/lib/constants'
 import { createClearableInterval } from '@/lib/helpers'
 import { Box, Center, Grid, Stack, styled } from '@/styled-system/jsx'
@@ -8,7 +10,7 @@ export function FeatureBlock({
   ref,
   isPaused,
 }: { ref: React.RefObject<HTMLDivElement | null>; isPaused: boolean }) {
-  const [[columns, rows], setGridFactors] = useState([16, 16])
+  const [[columns, rows], setGridFactors] = useState([32, 32])
   const [chosenCells, setChosenCells] = useState<number[]>([])
   const [intervalDuration, setIntervalDuration] = useState(250)
   const [gap, setGap] = useState(0)
@@ -23,7 +25,7 @@ export function FeatureBlock({
     if (isPaused) return // Do not restart interval while paused.
 
     intervalRef.current = createClearableInterval(() => {
-      if (Math.random() < 0.01) {
+      if (Math.random() < 0.1) {
         setChosenCells((prev) => buildCluster(prev, columns, rows, cellCount))
       }
     }, intervalDuration)
@@ -96,18 +98,12 @@ export function FeatureBlock({
             <Box
               key={i}
               bg="black"
-              _hover={{
-                bg: 'var(--cellbg)',
-              }}
               transition="all 0.1s"
               style={
                 {
-                  '--cellbg': `#${Math.floor(Math.random() * 16777215)
-                    .toString(16)
-                    .padStart(6, '0')}`,
-                  // transform: isChosen ? 'scale(0.7)' : 'scale(1)',
-                  // backgroundColor: isChosen ? 'black' : 'black',
-                  // borderRadius: isChosen ? '100%' : '0',
+                  transform: isChosen ? 'scale(0.7)' : 'scale(1)',
+                  backgroundColor: isChosen ? 'black' : 'black',
+                  borderRadius: isChosen ? '100%' : '0',
                 } as React.CSSProperties
               }
             />
@@ -178,7 +174,7 @@ const buildCluster = (
   cellCount: number,
 ): number[] => {
   const edgesCount = 2 * (columns + rows) - 4
-  const targetSize = Math.min(randomInt(3, 6), edgesCount)
+  const targetSize = Math.min(randomInt(8, 12), edgesCount)
 
   // Prefer near-edge neighbours from the previous cluster to keep some continuity
   let startCandidates: number[] = []

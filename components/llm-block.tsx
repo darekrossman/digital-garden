@@ -2,10 +2,11 @@
 
 import { LLMCanvas } from '@/components/llm-canvas'
 import { defaultConfig } from '@/lib/config'
-import { getRandomInt } from '@/lib/helpers'
+import { getRandomAdjective, getRandomInt, getRandomSymbolicObject } from '@/lib/helpers'
 import { buildPrompt } from '@/lib/promptUtils'
 import { Box, styled } from '@/styled-system/jsx'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { ImageFrame } from './image-frame'
 
 interface LLMBlockProps {
   index: number
@@ -25,8 +26,6 @@ export default function LLMBlock({
   style,
   ...props
 }: LLMBlockProps) {
-  const glitchProbability = 0.05
-
   const [isStreaming, setIsStreaming] = useState(false)
   const [currentText, setCurrentText] = useState(content)
 
@@ -40,6 +39,11 @@ export default function LLMBlock({
 
   // Add a key to force LLMCanvas to rerun when regeneration is triggered
   const [regenerateKey, setRegenerateKey] = useState(0)
+
+  const [imageWidth, setImageWidth] = useState(375)
+  const [showImage, setShowImage] = useState(false)
+
+  const glitchProbability = showImage ? 0.1 : 0.05
 
   // Ref for the root container so we can apply glitch effects directly
   const rootRef = useRef<HTMLDivElement>(null)
@@ -93,7 +97,9 @@ export default function LLMBlock({
       if (Math.random() < glitchProbability) {
         const dx = getRandomInt(-2, 1)
         const dy = getRandomInt(-1, 2)
-        el.style.transform = `translate(${dx}px, ${dy}px)`
+        if (Math.random() < 0.5) {
+          el.style.transform = `translate(${dx}px, ${dy}px)`
+        }
       } else {
         el.style.transform = originalStylesRef.current?.transform || ''
       }
@@ -102,7 +108,7 @@ export default function LLMBlock({
       if (Math.random() < glitchProbability) {
         el.style.opacity = Math.random() < 0.05 ? '0' : '1'
       } else {
-        el.style.opacity = originalStylesRef.current?.opacity || ''
+        el.style.opacity = originalStylesRef.current?.opacity || '1'
       }
 
       // Blur
@@ -116,7 +122,7 @@ export default function LLMBlock({
 
     // Run every ~120ms for a subtle effect
     clearGlitchInterval()
-    glitchIntervalRef.current = setInterval(applyGlitch, 120)
+    glitchIntervalRef.current = setInterval(applyGlitch, 90)
 
     // Cleanup – clear interval and restore original styles
     return cleanupGlitchStyles
@@ -137,6 +143,38 @@ export default function LLMBlock({
     }
   }, [shouldRegenerate, isStreaming, currentText, onRegenerationStart, isPaused])
 
+  useEffect(() => {
+    setShowImage(Math.random() < 0.1)
+    setImageWidth(Math.random() * 375 + 100)
+  }, [regenerateKey])
+
+  if (showImage) {
+    return (
+      <Box
+        position="absolute"
+        style={{
+          top: style?.top,
+          left: style?.left,
+          zIndex: style?.zIndex,
+          width: imageWidth,
+          mixBlendMode: 'multiply',
+          transform: style?.transform,
+          filter: style?.filter,
+        }}
+      >
+        <styled.div ref={rootRef}>
+          <ImageFrame
+            regenerateKey={regenerateKey}
+            messages={messages}
+            onComplete={() => {
+              setIsStreaming(false)
+            }}
+          />
+        </styled.div>
+      </Box>
+    )
+  }
+
   return (
     <Box
       maxHeight="100vh"
@@ -146,7 +184,7 @@ export default function LLMBlock({
       style={style}
       {...props}
     >
-      <styled.div ref={rootRef} transition="opacity .1s">
+      <styled.div ref={rootRef}>
         <LLMCanvas
           messages={messages}
           regenerateKey={regenerateKey}

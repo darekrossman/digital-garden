@@ -52,7 +52,6 @@ export function GenerativeBg() {
   useEffect(() => {
     if (isPaused) {
       setBlocksToRegenerate(new Set<number>())
-      // The interval will be cleared in the main interval effect
     }
   }, [isPaused])
 
@@ -96,27 +95,6 @@ export function GenerativeBg() {
       fontFamily: token(`fonts.${style.fontFamily}` as Token),
       filter: `blur(${style.scale < 1 ? Math.floor((1 - style.scale) * 5) : 0}px)`,
       transform: `scale(${style.scale}) rotateX(${style.rotateX}deg) rotateY(${style.rotateY}deg) rotateZ(${style.rotateZ}deg)`,
-    }
-
-    if (Math.random() < 0.1) {
-      const width = Math.random() * 375 + 100
-      return (
-        <Box
-          position="absolute"
-          style={{
-            ...styleObj,
-            width,
-            mixBlendMode: 'overlay',
-            backgroundBlendMode: 'difference',
-          }}
-          aspectRatio={1}
-          key={i}
-        >
-          <ImageFrame
-            prompt={`low-fi, pixelated, ${getRandomAdjective()}, esoteric machine code ascii art of a ${getRandomAdjective()} ${getRandomSymbolicObject()}, only use black for the foreground color, and make the background transparent white. Try to use ASCII art.`}
-          />
-        </Box>
-      )
     }
 
     return (

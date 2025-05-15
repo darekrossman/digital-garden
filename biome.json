@@ -12,7 +12,7 @@
         "noForEach": "off"
       },
       "correctness": {
-        "noUnusedVariables": "warn",
+        "noUnusedVariables": "off",
         "useExhaustiveDependencies": "off"
       },
       "style": {
