@@ -23,10 +23,10 @@ export const defaultConfig = {
   // Blocks
   blocks: {
     count: 12,
-    regenerateCount: 4,
+    regenerateCount: 2,
     positionRange: { min: -10, max: 90 },
     scaleRange: { min: 0.6, max: 2.6 },
-    widthRange: { min: 20, max: 40 },
+    widthRange: { min: 10, max: 30 },
     distributionFactor: 3,
     rotateZProbability: 0.15,
   },

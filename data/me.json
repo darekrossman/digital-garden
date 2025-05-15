@@ -1,0 +1,176 @@
+{
+  "basic_info": {
+    "name": "Darek Rossman",
+    "preferred_name": "Darek",
+    "location": "United States",
+    "timezone": "UTC-4",
+    "languages": [
+      "English"
+    ]
+  },
+  "personality": {
+    "traits": [
+      "deeply curious",
+      "highly analytical",
+      "empathetic",
+      "creative problem-solver",
+      "assertive communicator",
+      "independent thinker",
+      "aesthetic minimalist",
+      "intellectually restless",
+      "emotionally intelligent",
+      "strategic yet intuitive"
+    ],
+    "empathy_and_connection": {
+      "values_emotional_authenticity": true,
+      "seeks_meaningful_collaboration": true,
+      "sensitive_to_others_energy": true,
+      "natural_mentor": true
+    },
+    "creativity_and_expression": {
+      "experiments_in_sound_and_code": true,
+      "drawn_to_chaotic_systems_and_unpredictable_results": true,
+      "wants_to_merge_technical_and_artistic_sides": true,
+      "prefers_creative_constraints": true
+    }
+  },
+  "professional_experience": [
+    {
+      "title": "Principal Software Engineer",
+      "company": "64labs",
+      "duration": "2019\u20132025",
+      "summary": "Led architecture and engineering for global e-commerce clients, mentored engineers, built design systems, and introduced AI tooling across workflows.",
+      "key_contributions": [
+        "Led Callaway Golf\u2019s transition from Salesforce Reference Architecture to a high-performance Next.js storefront using App Router and server components.",
+        "Built the custom club configurator for Callaway from scratch.",
+        "Trained and mentored over 30 engineers across North America and Europe.",
+        "Introduced static CSS architecture using Vanilla Extract and Panda CSS.",
+        "Embedded AI-assisted code reviews using CodeRabbit and custom LLM tools.",
+        "Led the integration of Algolia for Aritzia, building real-time inventory updates and cross-checking tools to ensure accuracy between Algolia and Business Manager.",
+        "Architected reusable, scalable design systems for internal accelerators and clients.",
+        "Developed AI knowledge bases and triage agents to streamline onboarding and support."
+      ]
+    },
+    {
+      "title": "Senior Software Engineer / Tech Lead",
+      "company": "64labs",
+      "duration": "2016\u20132019",
+      "summary": "Owned technical direction for major client storefronts and spearheaded migration strategies to modern headless platforms.",
+      "key_contributions": [
+        "Developed headless storefronts for Duluth Trading, ELF Cosmetics, Moncler, and others.",
+        "Pioneered Salesforce OpenCommerce API and later Shopper APIs integrations.",
+        "Worked with multiple CMS platforms including Amplience, Contentful, and ContentStack.",
+        "Designed cross-platform developer tooling to bridge Salesforce and headless solutions.",
+        "Helped build 64labs\u2019 internal knowledge architecture and onboarding curriculum."
+      ]
+    },
+    {
+      "title": "Full-Stack Developer",
+      "company": "Various Contract Roles",
+      "duration": "2012\u20132016",
+      "summary": "Contributed to web and software projects across e-commerce, music, and creative media spaces. Blended technical and artistic development.",
+      "key_contributions": [
+        "Built digital audio tools and music platforms.",
+        "Contributed to visual storytelling and interactive installations.",
+        "Worked with early responsive design techniques and component-based architectures."
+      ]
+    }
+  ],
+  "ai_and_tooling": {
+    "focus_areas": [
+      "agentic automation",
+      "code review with LLMs",
+      "onboarding knowledge bases",
+      "RAG-based support agents"
+    ],
+    "philosophy": "AI as an amplifier of human capability\u2014when used ethically and with intention, it transforms individual productivity into scalable team velocity.",
+    "tooling": [
+      "CodeRabbit",
+      "custom LangChain agents",
+      "LLM-enabled documentation flows"
+    ]
+  },
+  "technical_skills": {
+    "languages": [
+      "TypeScript",
+      "JavaScript",
+      "Node.js"
+    ],
+    "frameworks": [
+      "React",
+      "Next.js",
+      "MobX",
+      "Vanilla Extract"
+    ],
+    "tools": [
+      "GitHub Actions",
+      "Jira",
+      "PostCSS",
+      "Panda CSS"
+    ],
+    "platforms": [
+      "Salesforce Commerce Cloud",
+      "Algolia",
+      "Contentful",
+      "Amplience"
+    ],
+    "ci_cd": [
+      "semantic-release",
+      "automated branching strategies",
+      "metrics-driven SDLC"
+    ]
+  },
+  "creative_work": {
+    "audio_visual_art": true,
+    "hardware_design": {
+      "eurorack_modules": [
+        "VCAs",
+        "Filters",
+        "Envelope Generators",
+        "Reverb Units"
+      ],
+      "microcontroller_programming": true,
+      "circuit_board_layout_and_fabrication": true
+    },
+    "generative_systems": {
+      "uses_webgpu": true,
+      "inspired_by_neural_and_physics_models": true,
+      "interested_in_sonic_landscapes_and_visual_fields": true
+    }
+  },
+  "career_goals": {
+    "short_term": [
+      "Join a leadership role focused on developer experience, platform architecture, or AI integration",
+      "Build or contribute to a meaningful product with long-term vision and scale"
+    ],
+    "long_term": [
+      "Create a deeply human, expressive, AI-enabled creative toolkit",
+      "Launch a new company or open platform that bridges engineering and artistic expression",
+      "Build something that outlives trends and reshapes how people create"
+    ]
+  },
+  "motivations_and_philosophy": {
+    "motivated_by": [
+      "meaningful challenge",
+      "creative freedom",
+      "intellectual rigor"
+    ],
+    "seeks": [
+      "truth",
+      "clarity",
+      "empathy in leadership",
+      "courage to challenge norms"
+    ],
+    "believes": {
+      "software_is_craft": true,
+      "collaboration_requires_respect": true,
+      "scaling_is_about_enabling": true
+    }
+  },
+  "online_presence": {
+    "reddit": "u/okelderberry3471",
+    "twitter": "@darekrossman",
+    "alias": "subpopular"
+  },
+  "last_updated": "2025-05-13T12:22:15.814669"
+}

@@ -14,7 +14,6 @@ interface LLMBlockProps {
   isPaused?: boolean
   onRegenerationStart: () => void
   style?: React.CSSProperties
-  containerRef?: React.RefObject<HTMLDivElement | null>
 }
 
 export default function LLMBlock({
@@ -24,7 +23,6 @@ export default function LLMBlock({
   isPaused,
   onRegenerationStart,
   style,
-  containerRef,
   ...props
 }: LLMBlockProps) {
   const glitchProbability = 0.05

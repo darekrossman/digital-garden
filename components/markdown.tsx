@@ -2,6 +2,7 @@ import { getRandomFontFamily, getRandomInt } from '@/lib/helpers'
 import { css } from '@/styled-system/css'
 import { styled } from '@/styled-system/jsx'
 import { Token, token } from '@/styled-system/tokens'
+import { useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 
 interface MarkdownProps {
@@ -15,11 +16,28 @@ const colors = ['blue', 'green', 'red', 'yellow', 'gray', 'black']
  * Convert markdown string to React components
  */
 export function Markdown({ children }: MarkdownProps) {
+  // Save makeWild and only update when children changes
+  const [makeWild, setMakeWild] = useState(() => Math.random() < 1)
+  useEffect(() => {
+    setMakeWild(Math.random() < 0.05)
+  }, [children])
+
   return (
     <ReactMarkdown
       components={{
         h1: ({ children, node, ...props }) => {
-          return <styled.h1 {...props}>{children}</styled.h1>
+          return (
+            <styled.h1
+              {...props}
+              style={
+                makeWild
+                  ? { fontSize: '100px', lineHeight: '80px', fontFamily: token('fonts.pixel') }
+                  : {}
+              }
+            >
+              {children}
+            </styled.h1>
+          )
         },
         h2: ({ children, node, ...props }) => {
           return (
@@ -55,7 +73,14 @@ export function Markdown({ children }: MarkdownProps) {
 
         p: ({ children, node, ...props }) => {
           return (
-            <styled.p {...props} style={{ opacity: Math.random() * 0.2 + 1 }}>
+            <styled.p
+              {...props}
+              style={{
+                opacity: Math.random() * 0.2 + 1,
+                lineHeight: `${getRandomInt(95, 105)}%`,
+                transform: Math.random() < 0.01 ? 'scaleX(20)' : 'none',
+              }}
+            >
               {children}
             </styled.p>
           )

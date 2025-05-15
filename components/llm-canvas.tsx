@@ -1,7 +1,7 @@
 'use client'
 
+import { generate } from '@/components/inference/chat-stream'
 import { Markdown } from '@/components/markdown'
-import { generate } from '@/lib/inference'
 import { Box, Stack } from '@/styled-system/jsx'
 import { readStreamableValue } from 'ai/rsc'
 import { ChatCompletionMessageParam } from 'openai/src/resources.js'
