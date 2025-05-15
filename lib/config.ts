@@ -2,7 +2,7 @@ import { wireframeColors } from './constants'
 
 export const defaultConfig = {
   isPaused: false,
-  regenerateInterval: 4000,
+  regenerateInterval: 6000,
 
   // Wireframe
   wireframe: {

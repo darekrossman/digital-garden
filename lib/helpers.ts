@@ -2,6 +2,8 @@
  * Helper functions for the portfolio application
  */
 
+import { adjectives, symbolicObjects } from './constants'
+
 // Helper function that returns a random integer between min and max (inclusive)
 // with optional non-linear distribution
 export const getRandomInt = (
@@ -155,4 +157,18 @@ export function getRandomFontFamily(weighting: Record<string, number>): string {
   }
   // fallback (should not happen)
   return keys[0]
+}
+
+/**
+ * Get a random adjective from the adjectives array
+ */
+export function getRandomAdjective(): string {
+  return adjectives[getRandomInt(0, adjectives.length - 1)]
+}
+
+/**
+ * Get a random object from the symbolicObjects array
+ */
+export function getRandomSymbolicObject(): string {
+  return symbolicObjects[getRandomInt(0, symbolicObjects.length - 1)]
 }

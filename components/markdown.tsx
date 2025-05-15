@@ -19,7 +19,7 @@ export function Markdown({ children }: MarkdownProps) {
   // Save makeWild and only update when children changes
   const [makeWild, setMakeWild] = useState(() => Math.random() < 1)
   useEffect(() => {
-    setMakeWild(Math.random() < 0.05)
+    setMakeWild(Math.random() < 0.2)
   }, [children])
 
   return (

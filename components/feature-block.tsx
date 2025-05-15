@@ -8,28 +8,28 @@ export function FeatureBlock({
   ref,
   isPaused,
 }: { ref: React.RefObject<HTMLDivElement | null>; isPaused: boolean }) {
-  const [[columns, rows], setGridFactors] = useState([32, 32])
+  const [[columns, rows], setGridFactors] = useState([16, 16])
   const [chosenCells, setChosenCells] = useState<number[]>([])
-  const [intervalDuration, setIntervalDuration] = useState(150)
+  const [intervalDuration, setIntervalDuration] = useState(250)
   const [gap, setGap] = useState(0)
   const intervalRef = useRef<{ clear: () => void; id: NodeJS.Timeout } | null>(null)
 
   const cellCount = rows * columns
 
-  // useEffect(() => {
-  //   // Always clear any existing interval first.
-  //   intervalRef.current?.clear()
+  useEffect(() => {
+    // Always clear any existing interval first.
+    intervalRef.current?.clear()
 
-  //   if (isPaused) return // Do not restart interval while paused.
+    if (isPaused) return // Do not restart interval while paused.
 
-  //   intervalRef.current = createClearableInterval(() => {
-  //     if (Math.random() < 0.1) {
-  //       setChosenCells((prev) => buildCluster(prev, columns, rows, cellCount))
-  //     }
-  //   }, intervalDuration)
+    intervalRef.current = createClearableInterval(() => {
+      if (Math.random() < 0.01) {
+        setChosenCells((prev) => buildCluster(prev, columns, rows, cellCount))
+      }
+    }, intervalDuration)
 
-  //   return () => intervalRef.current?.clear()
-  // }, [columns, rows, intervalDuration, isPaused])
+    return () => intervalRef.current?.clear()
+  }, [columns, rows, intervalDuration, isPaused])
 
   return (
     <Box
@@ -61,18 +61,61 @@ export function FeatureBlock({
         {Array.from({ length: cellCount }).map((_, i) => {
           const isChosen = chosenCells.includes(i)
 
-          return (
+          // Roughly half the chosen cells will render as a "+" instead of a circle.
+          const renderPlus = isChosen && i % 2 === 0
+
+          return renderPlus ? (
             <Box
               key={i}
-              style={{
-                backgroundColor: isChosen ? 'transparent' : 'black',
+              position="relative"
+              backgroundColor="transparent"
+              style={{ transform: 'rotate(45deg)', transformOrigin: 'center' }}
+            >
+              {/* vertical bar */}
+              <Box
+                position="absolute"
+                top="0"
+                left="50%"
+                transform="translateX(-50%)"
+                width="20%"
+                height="100%"
+                backgroundColor="black"
+              />
+              {/* horizontal bar */}
+              <Box
+                position="absolute"
+                top="50%"
+                left="0"
+                transform="translateY(-50%)"
+                width="100%"
+                height="20%"
+                backgroundColor="black"
+              />
+            </Box>
+          ) : (
+            <Box
+              key={i}
+              bg="black"
+              _hover={{
+                bg: 'var(--cellbg)',
               }}
+              transition="all 0.1s"
+              style={
+                {
+                  '--cellbg': `#${Math.floor(Math.random() * 16777215)
+                    .toString(16)
+                    .padStart(6, '0')}`,
+                  // transform: isChosen ? 'scale(0.7)' : 'scale(1)',
+                  // backgroundColor: isChosen ? 'black' : 'black',
+                  // borderRadius: isChosen ? '100%' : '0',
+                } as React.CSSProperties
+              }
             />
           )
         })}
       </Grid>
 
-      <Center color="white" h="full">
+      <Center color="white" h="full" pointerEvents="none">
         <Stack w="282px" gap="8" textWrap="balance">
           <styled.h1
             fontFamily="pixel"
@@ -135,7 +178,7 @@ const buildCluster = (
   cellCount: number,
 ): number[] => {
   const edgesCount = 2 * (columns + rows) - 4
-  const clusterSize = Math.min(randomInt(4, 16), edgesCount)
+  const targetSize = Math.min(randomInt(3, 6), edgesCount)
 
   // Prefer near-edge neighbours from the previous cluster to keep some continuity
   let startCandidates: number[] = []
@@ -162,55 +205,24 @@ const buildCluster = (
 
   const cluster: number[] = [startCell]
 
-  while (cluster.length < clusterSize) {
-    const JUMP_PROBABILITY = 0
-    const shouldJump = Math.random() < JUMP_PROBABILITY
+  // Maintain a frontier of candidate neighbour cells that are adjacent to the current cluster
+  let frontier = getNeighbours(startCell, columns, rows).filter(
+    (n) => isNearEdgeCell(n, columns, rows) && !cluster.includes(n),
+  )
 
-    if (shouldJump) {
-      // Jump to a random unused near-edge cell
-      let candidate = randomInt(0, cellCount - 1)
-      let guard = 0
-      while (
-        (!isNearEdgeCell(candidate, columns, rows) || cluster.includes(candidate)) &&
-        guard < 100
-      ) {
-        candidate = randomInt(0, cellCount - 1)
-        guard++
-      }
-
-      if (isNearEdgeCell(candidate, columns, rows) && !cluster.includes(candidate)) {
-        cluster.push(candidate)
-        continue
-      }
-    }
-
-    // Expand from a random seed cell, keeping to near-edge neighbours
-    const seed = cluster[randomInt(0, cluster.length - 1)]
-    const neighbours = getNeighbours(seed, columns, rows).filter(
-      (n) => isNearEdgeCell(n, columns, rows) && !cluster.includes(n),
-    )
-
-    if (!neighbours.length) {
-      // As a fallback, try to place a random unused near-edge cell.
-      let fallback = randomInt(0, cellCount - 1)
-      let guard = 0
-      while (
-        (cluster.includes(fallback) || !isNearEdgeCell(fallback, columns, rows)) &&
-        guard < 100
-      ) {
-        fallback = randomInt(0, cellCount - 1)
-        guard++
-      }
-      if (!cluster.includes(fallback) && isNearEdgeCell(fallback, columns, rows)) {
-        cluster.push(fallback)
-      } else {
-        break // give up if we can't find any more cells to add
-      }
-      continue
-    }
-
-    const next = neighbours[randomInt(0, neighbours.length - 1)]
+  while (cluster.length < targetSize && frontier.length) {
+    // Pick a random frontier cell to add
+    const next = frontier[randomInt(0, frontier.length - 1)]
     cluster.push(next)
+
+    // Update frontier: remove the picked cell and add its valid neighbours
+    frontier = frontier.filter((n) => n !== next)
+    frontier.push(
+      ...getNeighbours(next, columns, rows).filter(
+        (n) => isNearEdgeCell(n, columns, rows) && !cluster.includes(n),
+      ),
+    )
+    frontier = unique(frontier)
   }
 
   return cluster

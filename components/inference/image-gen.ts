@@ -1,26 +1,29 @@
 'use server'
 
-import { InferenceClient } from '@huggingface/inference'
-
 export async function generate(inputs: string) {
-  const client = new InferenceClient(process.env.HUGGINGFACE_TOKEN)
+  const endpoint = 'https://h6arsy5dk0ti9sz1.us-east-1.aws.endpoints.huggingface.cloud'
 
-  const imageResponse = await client.textToImage({
-    provider: 'nebius',
-    model: 'black-forest-labs/FLUX.1-dev',
-    inputs: inputs,
-    parameters: { num_inference_steps: 3 },
-    temperature: 0.9,
+  const response = await fetch(endpoint, {
+    headers: {
+      Accept: 'image/png',
+      Authorization: `Bearer ${process.env.HUGGINGFACE_TOKEN}`,
+      'Content-Type': 'application/json',
+    },
+    method: 'POST',
+    body: JSON.stringify({
+      inputs: inputs,
+      parameters: {
+        num_inference_steps: 3,
+        guidance_scale: 4,
+        width: 376,
+        height: 376,
+      },
+    }),
   })
 
-  const image = imageResponse as unknown as Blob
+  const blob = await response.blob()
+  const buffer = Buffer.from(await blob.arrayBuffer())
+  const b64 = buffer.toString('base64')
 
-  // Convert Blob to ArrayBuffer
-  const arrayBuffer = await image.arrayBuffer()
-  const buffer = Buffer.from(arrayBuffer)
-  const base64 = buffer.toString('base64')
-  const mimeType = image.type // e.g., 'image/jpeg'
-  const dataUrl = `data:${mimeType};base64,${base64}`
-
-  return dataUrl
+  return `data:image/png;base64,${b64}`
 }

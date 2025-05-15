@@ -8,10 +8,6 @@ import { Box } from '@/styled-system/jsx'
 export default function Home() {
   return (
     <Box h="100dvh" position="relative" display="flex" flexDirection="column">
-      <Box>
-        <ImageFrame />
-      </Box>
-
       <GenerativeBg />
     </Box>
   )

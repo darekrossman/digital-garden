@@ -4,8 +4,8 @@ import { generateInitialBlockStyles } from '@/lib/blockUtils'
 import { generateRandomBlockStyle } from '@/lib/blockUtils'
 import { regenerateBlocks } from '@/lib/blockUtils'
 import { defaultConfig } from '@/lib/config'
-import { defaultIntro } from '@/lib/constants'
-import { createClearableInterval } from '@/lib/helpers'
+import { adjectives, defaultIntro } from '@/lib/constants'
+import { createClearableInterval, getRandomAdjective, getRandomSymbolicObject } from '@/lib/helpers'
 import { Box, styled } from '@/styled-system/jsx'
 import { token } from '@/styled-system/tokens'
 import { Token } from '@/styled-system/tokens'
@@ -14,6 +14,7 @@ import { useEffect, useState } from 'react'
 import { useCallback } from 'react'
 import { useRef } from 'react'
 import { FeatureBlock } from './feature-block'
+import { ImageFrame } from './image-frame'
 import LLMBlock from './llm-block'
 import { RandomGeometry } from './random-geometry'
 
@@ -85,7 +86,38 @@ export function GenerativeBg() {
 
   const renderBlock = (i: number) => {
     const style = blockStyles[i]
-    const filter = `blur(${style.scale < 1 ? Math.floor((1 - style.scale) * 5) : 0}px)`
+
+    const styleObj = {
+      backgroundColor: style.bg,
+      top: style.top,
+      left: style.left,
+      zIndex: style.zIndex,
+      width: `${style.width}vw`,
+      fontFamily: token(`fonts.${style.fontFamily}` as Token),
+      filter: `blur(${style.scale < 1 ? Math.floor((1 - style.scale) * 5) : 0}px)`,
+      transform: `scale(${style.scale}) rotateX(${style.rotateX}deg) rotateY(${style.rotateY}deg) rotateZ(${style.rotateZ}deg)`,
+    }
+
+    if (Math.random() < 0.1) {
+      const width = Math.random() * 375 + 100
+      return (
+        <Box
+          position="absolute"
+          style={{
+            ...styleObj,
+            width,
+            mixBlendMode: 'overlay',
+            backgroundBlendMode: 'difference',
+          }}
+          aspectRatio={1}
+          key={i}
+        >
+          <ImageFrame
+            prompt={`low-fi, pixelated, ${getRandomAdjective()}, esoteric machine code ascii art of a ${getRandomAdjective()} ${getRandomSymbolicObject()}, only use black for the foreground color, and make the background transparent white. Try to use ASCII art.`}
+          />
+        </Box>
+      )
+    }
 
     return (
       <LLMBlock
@@ -95,23 +127,16 @@ export function GenerativeBg() {
         isPaused={isPaused}
         onRegenerationStart={() => onBlockRegenerationStart(i)}
         content={JSON.stringify(defaultIntro)}
-        style={{
-          backgroundColor: style.bg,
-          top: style.top,
-          left: style.left,
-          zIndex: style.zIndex,
-          width: `${style.width}vw`,
-          fontFamily: token(`fonts.${style.fontFamily}` as Token),
-          filter,
-          transform: `scale(${style.scale}) rotateX(${style.rotateX}deg) rotateY(${style.rotateY}deg) rotateZ(${style.rotateZ}deg)`,
-        }}
+        style={styleObj}
       />
     )
   }
   return (
     <Box position="relative" h="100%" overflow="hidden">
       {blockStyles.length > 0 && Array.from({ length: blockCount }).map((_, i) => renderBlock(i))}
+
       <FeatureBlock ref={containerRef} isPaused={isPaused} />
+
       <RandomGeometry isPaused={isPaused} />
 
       <Box pos="fixed" bottom="0" right="0" zIndex="99999">
