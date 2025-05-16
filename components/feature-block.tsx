@@ -3,6 +3,7 @@
 import { defaultIntro } from '@/lib/constants'
 import { createClearableInterval } from '@/lib/helpers'
 import { Box, Center, Grid, Stack, styled } from '@/styled-system/jsx'
+import Link from 'next/link'
 import { startTransition, useEffect, useRef, useState } from 'react'
 import Scrambler from './scrambler'
 
@@ -111,7 +112,7 @@ export function FeatureBlock({
         })}
       </Grid>
 
-      <Center color="white" h="full" pointerEvents="none">
+      <Center color="white" h="full">
         <Stack w="282px" gap="8" textWrap="balance">
           <styled.h1
             fontFamily="pixel"
@@ -127,6 +128,10 @@ export function FeatureBlock({
               <Scrambler>.</Scrambler>
             </styled.p>
           ))}
+          <div aria-hidden="true" />
+          <styled.p color="yellow" textBoxEdge="cap alphabetic" textBoxTrim="trim-both">
+            <Link href="/me">Take me away from here</Link>
+          </styled.p>
         </Stack>
       </Center>
     </Box>
