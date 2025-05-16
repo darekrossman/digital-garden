@@ -25,7 +25,7 @@ export function ImageFrame({ messages, onComplete, regenerateKey }: ImageFramePr
       return
     }
 
-    const prompt = `lo-fi, esoteric, techno-code, ${getRandomAdjective()}, black ${getRandomSymbolicObject()} with transparent white background. image should be contained in the bounds of the frame and not be cropped.`
+    const prompt = `lo-fi, esoteric, techno-code, ${getRandomAdjective()}, black ${getRandomSymbolicObject()} with transparent white background. image should be contained in the bounds of the frame and not be cropped, include stream of machine code, jagged interruptions, strange perspectives.`
 
     // const prompt = messages?.[0]?.content
 

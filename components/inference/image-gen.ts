@@ -16,7 +16,7 @@ export async function generate(inputs: string) {
         width: 200,
         height: 200,
       },
-      seed: -1,
+      seed: Math.random() * 1000000,
       // enable_safety_checker: false,
     },
   })) as unknown as Blob
