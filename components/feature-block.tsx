@@ -18,21 +18,9 @@ export function FeatureBlock({
   const intervalRef = useRef<{ clear: () => void; id: NodeJS.Timeout } | null>(null)
 
   const cellCount = rows * columns
-
-  useEffect(() => {
-    // Always clear any existing interval first.
-    intervalRef.current?.clear()
-
-    if (isPaused) return // Do not restart interval while paused.
-
-    intervalRef.current = createClearableInterval(() => {
-      if (Math.random() < 0.1) {
-        setChosenCells((prev) => buildCluster(prev, columns, rows, cellCount))
-      }
-    }, intervalDuration)
-
-    return () => intervalRef.current?.clear()
-  }, [columns, rows, intervalDuration, isPaused])
+  const blockSize = 376
+  const cellWidth = blockSize / columns
+  const cellHeight = blockSize / rows
 
   return (
     <Box
@@ -112,8 +100,8 @@ export function FeatureBlock({
         })}
       </Grid>
 
-      <Center color="white" h="full">
-        <Stack w="282px" gap="8" textWrap="balance">
+      <Center color="white" h="full" pos="relative">
+        <Stack gap="8" textWrap="balance" style={{ paddingInline: cellWidth * 4 }}>
           <styled.h1
             fontFamily="pixel"
             fontSize="lg"
@@ -128,103 +116,31 @@ export function FeatureBlock({
               <Scrambler>.</Scrambler>
             </styled.p>
           ))}
-          <div aria-hidden="true" />
-          <styled.p color="yellow" textBoxEdge="cap alphabetic" textBoxTrim="trim-both">
-            <Link href="/me">Take me away from here</Link>
-          </styled.p>
         </Stack>
+
+        <Center
+          pos="absolute"
+          right="0"
+          bg="black"
+          color="white"
+          fontFamily="pixel"
+          fontWeight="bolder"
+          fontSize="lg"
+          borderBottom="1px solid green"
+          _hover={{
+            color: 'green',
+          }}
+          style={{
+            paddingRight: cellWidth * 4,
+            height: cellHeight * 2,
+            bottom: cellHeight * 2,
+          }}
+        >
+          <styled.p textAlign="right" textBoxEdge="cap alphabetic" textBoxTrim="trim-both">
+            <Link href="/me">Move forward</Link>
+          </styled.p>
+        </Center>
       </Center>
     </Box>
   )
-}
-
-const getNeighbours = (index: number, columns: number, rows: number): number[] => {
-  const neighbours: number[] = []
-  const row = Math.floor(index / columns)
-  const col = index % columns
-
-  // left / right (stay on the same row)
-  if (col > 0) neighbours.push(index - 1)
-  if (col < columns - 1) neighbours.push(index + 1)
-
-  // up / down (same column)
-  if (row > 0) neighbours.push(index - columns)
-  if (row < rows - 1) neighbours.push(index + columns)
-
-  return neighbours
-}
-
-const unique = (arr: number[]) => Array.from(new Set(arr))
-
-const randomInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min
-
-const isEdgeCell = (index: number, columns: number, rows: number): boolean => {
-  const row = Math.floor(index / columns)
-  const col = index % columns
-  return row === 0 || row === rows - 1 || col === 0 || col === columns - 1
-}
-
-// Cells that are either on the edge OR directly adjacent (one step) to an edge cell.
-// I.e. any cell whose row/col index is 0, 1, rows-2, rows-1 or 0, 1, columns-2, columns-1.
-const isNearEdgeCell = (index: number, columns: number, rows: number): boolean => {
-  const row = Math.floor(index / columns)
-  const col = index % columns
-  return row <= 1 || row >= rows - 2 || col <= 1 || col >= columns - 2
-}
-
-const buildCluster = (
-  prevCluster: number[],
-  columns: number,
-  rows: number,
-  cellCount: number,
-): number[] => {
-  const edgesCount = 2 * (columns + rows) - 4
-  const targetSize = Math.min(randomInt(8, 12), edgesCount)
-
-  // Prefer near-edge neighbours from the previous cluster to keep some continuity
-  let startCandidates: number[] = []
-  if (prevCluster.length) {
-    prevCluster.forEach((cell) => {
-      startCandidates.push(
-        ...getNeighbours(cell, columns, rows).filter((n) => isNearEdgeCell(n, columns, rows)),
-      )
-    })
-  }
-  startCandidates = unique(startCandidates)
-
-  // Pick a valid start cell
-  let startCell = randomInt(0, cellCount - 1)
-  if (startCandidates.length) {
-    startCell = startCandidates[randomInt(0, startCandidates.length - 1)]
-  } else {
-    let guard = 0
-    while (!isNearEdgeCell(startCell, columns, rows) && guard < 200) {
-      startCell = randomInt(0, cellCount - 1)
-      guard++
-    }
-  }
-
-  const cluster: number[] = [startCell]
-
-  // Maintain a frontier of candidate neighbour cells that are adjacent to the current cluster
-  let frontier = getNeighbours(startCell, columns, rows).filter(
-    (n) => isNearEdgeCell(n, columns, rows) && !cluster.includes(n),
-  )
-
-  while (cluster.length < targetSize && frontier.length) {
-    // Pick a random frontier cell to add
-    const next = frontier[randomInt(0, frontier.length - 1)]
-    cluster.push(next)
-
-    // Update frontier: remove the picked cell and add its valid neighbours
-    frontier = frontier.filter((n) => n !== next)
-    frontier.push(
-      ...getNeighbours(next, columns, rows).filter(
-        (n) => isNearEdgeCell(n, columns, rows) && !cluster.includes(n),
-      ),
-    )
-    frontier = unique(frontier)
-  }
-
-  return cluster
 }
