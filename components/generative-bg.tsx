@@ -13,8 +13,8 @@ import { BlockStyle } from '@/types'
 import { useEffect, useState } from 'react'
 import { useCallback } from 'react'
 import { useRef } from 'react'
+import { unstable_ViewTransition as ViewTransition } from 'react'
 import { FeatureBlock } from './feature-block'
-import { ImageFrame } from './image-frame'
 import LLMBlock from './llm-block'
 import { RandomGeometry } from './random-geometry'
 
@@ -113,7 +113,9 @@ export function GenerativeBg() {
     <Box position="relative" h="100%" overflow="hidden">
       {blockStyles.length > 0 && Array.from({ length: blockCount }).map((_, i) => renderBlock(i))}
 
-      <FeatureBlock ref={containerRef} isPaused={isPaused} />
+      <ViewTransition name="fblock">
+        <FeatureBlock ref={containerRef} isPaused={isPaused} />
+      </ViewTransition>
 
       <RandomGeometry isPaused={isPaused} />
 

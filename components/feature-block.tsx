@@ -10,7 +10,7 @@ import Scrambler from './scrambler'
 export function FeatureBlock({
   ref,
   isPaused,
-}: { ref: React.RefObject<HTMLDivElement | null>; isPaused: boolean }) {
+}: { ref?: React.RefObject<HTMLDivElement | null>; isPaused: boolean }) {
   const [[columns, rows], setGridFactors] = useState([32, 32])
   const [chosenCells, setChosenCells] = useState<number[]>([])
   const [intervalDuration, setIntervalDuration] = useState(250)

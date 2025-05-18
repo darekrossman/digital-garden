@@ -1,3 +1,4 @@
+import { Box } from '@/styled-system/jsx'
 import './globals.css'
 import { css, cx } from '@/styled-system/css'
 import type { Metadata } from 'next'
@@ -28,7 +29,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={cx(silkscreen.variable, majorMonoDisplay.variable)}>
-      <body className={css({ position: 'relative' })}>{children}</body>
+      <body className={css({ position: 'relative' })}>
+        <Box h="100dvh" position="relative" display="flex" flexDirection="column">
+          {children}
+        </Box>
+      </body>
     </html>
   )
 }

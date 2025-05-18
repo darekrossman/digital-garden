@@ -1,3 +1,54 @@
+import { Video } from '@/components/video'
+import { Box, styled } from '@/styled-system/jsx'
+import Link from 'next/link'
+import { unstable_ViewTransition as ViewTransition } from 'react'
+
 export default function Me() {
-  return <div>Me</div>
+  return (
+    <ViewTransition enter="glitch-in" exit="glitch-out">
+      <Box
+        h="100dvh"
+        position="relative"
+        display="flex"
+        flexDirection="column"
+        justifyContent="center"
+        alignItems="center"
+        bg="orange"
+      >
+        <styled.h1
+          pos="relative"
+          fontFamily="majorMono"
+          fontSize="4xl"
+          fontWeight="extrabold"
+          color="white"
+          // mixBlendMode="difference"
+          zIndex="2"
+        >
+          ABout Me
+        </styled.h1>
+
+        <Box
+          pos="absolute"
+          top="50%"
+          left="50%"
+          transform="translate(-50%, -50%)"
+          mixBlendMode="multiply"
+          zIndex="1"
+        >
+          <Video src="/video/spinning-asteroid1.mp4" width="full" maxWidth="600px" />
+        </Box>
+
+        <styled.p
+          position="absolute"
+          bottom="4"
+          left="4"
+          fontSize="sm"
+          fontFamily="pixel"
+          textAlign="center"
+        >
+          <Link href="/">take me home</Link>
+        </styled.p>
+      </Box>
+    </ViewTransition>
+  )
 }

@@ -44,7 +44,7 @@ export default function LLMBlock({
   const [showImage, setShowImage] = useState(false)
 
   const glitchProbability = showImage ? 0.1 : 0.05
-
+  const imageProbability = 0
   // Ref for the root container so we can apply glitch effects directly
   const rootRef = useRef<HTMLDivElement>(null)
   const glitchIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -144,7 +144,7 @@ export default function LLMBlock({
   }, [shouldRegenerate, isStreaming, currentText, onRegenerationStart, isPaused])
 
   useEffect(() => {
-    setShowImage(Math.random() < 0.1)
+    setShowImage(Math.random() < imageProbability)
     setImageWidth(Math.random() * 375 + 100)
   }, [regenerateKey])
 
@@ -165,7 +165,6 @@ export default function LLMBlock({
         <styled.div ref={rootRef}>
           <ImageFrame
             regenerateKey={regenerateKey}
-            messages={messages}
             onComplete={() => {
               setIsStreaming(false)
             }}
