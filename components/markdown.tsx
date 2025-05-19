@@ -10,7 +10,8 @@ interface MarkdownProps {
   className?: string
 }
 
-const colors = ['blue', 'green', 'red', 'yellow', 'gray', 'black']
+// const colors = ['black', 'blue', 'green', 'red', 'yellow', 'gray', ]
+const colors = ['black', 'gray', 'blue']
 
 /**
  * Convert markdown string to React components
@@ -31,7 +32,12 @@ export function Markdown({ children }: MarkdownProps) {
               {...props}
               style={
                 makeWild
-                  ? { fontSize: '100px', lineHeight: '80px', fontFamily: token('fonts.pixel') }
+                  ? {
+                      fontSize: '100px',
+                      lineHeight: '80px',
+                      fontFamily: token('fonts.pixel'),
+                      color: 'red',
+                    }
                   : {}
               }
             >
@@ -47,6 +53,12 @@ export function Markdown({ children }: MarkdownProps) {
                 fontFamily: token(
                   `fonts.${getRandomFontFamily({ majorMono: 0.2, mono: 0.8 })}` as Token,
                 ),
+                ...(makeWild && {
+                  fontSize: '88px',
+                  lineHeight: '80px',
+                  fontFamily: token('fonts.pixel'),
+                  color: 'black',
+                }),
               }}
             >
               {children}

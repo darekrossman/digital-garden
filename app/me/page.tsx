@@ -1,4 +1,4 @@
-import { Video } from '@/components/video'
+import { AsteroidVideo } from '@/components/asteroid-video'
 import { Box, styled } from '@/styled-system/jsx'
 import Link from 'next/link'
 import { unstable_ViewTransition as ViewTransition } from 'react'
@@ -27,15 +27,8 @@ export default function Me() {
           ABout Me
         </styled.h1>
 
-        <Box
-          pos="absolute"
-          top="50%"
-          left="50%"
-          transform="translate(-50%, -50%)"
-          mixBlendMode="multiply"
-          zIndex="1"
-        >
-          <Video src="/video/spinning-asteroid1.mp4" width="full" maxWidth="600px" />
+        <Box pos="absolute" top="50%" left="50%" transform="translate(-50%, -50%)" zIndex="1">
+          <AsteroidVideo />
         </Box>
 
         <styled.p
