@@ -13,6 +13,8 @@ export function generateRandomBlockStyle(): BlockStyle {
   const blockWidth = defaultConfig.blocks.widthRange
   const rotateZProb = defaultConfig.blocks.rotateZProbability
 
+  const colors = ['transprent', 'gray', 'white', 'red', 'blue', 'orange']
+
   return {
     top: `${getRandomInt(blockPosRange.min, blockPosRange.max)}%`,
     left: `${getRandomInt(blockPosRange.min, blockPosRange.max)}%`,
@@ -28,6 +30,7 @@ export function generateRandomBlockStyle(): BlockStyle {
     width: getRandomInt(blockWidth.min, blockWidth.max),
     bg: 'transparent',
     fontFamily: getRandomFontFamily({ pixel: 0.1, mono: 0.9 }),
+    mixBlendMode: 'difference',
   }
 }
 

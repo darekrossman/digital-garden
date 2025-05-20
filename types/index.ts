@@ -16,6 +16,7 @@ export type BlockStyle = {
   rotateZ: number
   bg: string
   fontFamily: string
+  mixBlendMode: React.CSSProperties['mixBlendMode']
 }
 
 /**

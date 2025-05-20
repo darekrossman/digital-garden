@@ -1,150 +1,190 @@
 'use client'
 
-import { Box, HTMLStyledProps, styled } from '@/styled-system/jsx'
+import { Box, Center, HTMLStyledProps, Stack, styled } from '@/styled-system/jsx'
+import {
+  MotionValue,
+  cubicBezier,
+  motion,
+  useMotionValue,
+  useMotionValueEvent,
+  useScroll,
+  useTransform,
+} from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
 
 // Define a styled video element that we can easily control with classes
 const Video = styled('video', {
   base: {
     position: 'absolute',
-    inset: 0,
-    w: '100%',
-    h: '100%',
+    top: '50%',
+    left: '50%',
+    transform: 'translate(-50%, -50%)',
+    w: '400px',
+    aspectRatio: '1/1',
+    maxHeight: '100vh',
     objectFit: 'cover',
-    opacity: 0,
-    // transition: 'opacity 0.4s ease',
-    '&.visible': {
-      opacity: 1,
-    },
-    '&.glitch': {
-      animation: 'glitch 0.3s steps(5) infinite',
-      filter: 'contrast(1.2) saturate(1.5)',
-      mixBlendMode: 'exclusion',
-    },
+    opacity: 1,
+  },
+})
+
+const StyledMotion = styled(motion.div)
+const MotionCenter = styled(StyledMotion, {
+  base: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    transform: 'translate(-50%, -50%)',
   },
 })
 
 export function AsteroidVideo(props: HTMLStyledProps<'video'>) {
   const video1Ref = useRef<HTMLVideoElement>(null)
   const video2Ref = useRef<HTMLVideoElement>(null)
-  // 0 -> first video visible, 1 -> second video visible
+  const refs = [video1Ref, video2Ref]
   const [current, setCurrent] = useState<0 | 1>(0)
 
-  // Keep references in an array for easy access
-  const refs = [video1Ref, video2Ref]
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const { scrollY, scrollYProgress } = useScroll({
+    container: scrollContainerRef,
+    // target: scrollContainerRef,
+  })
 
-  // Utility: add / remove class helpers
-  const addClass = (el: HTMLVideoElement | null, cls: string) => el && el.classList.add(cls)
-  const removeClass = (el: HTMLVideoElement | null, cls: string) => el && el.classList.remove(cls)
+  const [screenWidth, setScreenWidth] = useState(0)
+  const [screenHeight, setScreenHeight] = useState(0)
 
-  // Inject the keyframes *once* when the component mounts
   useEffect(() => {
-    const style = document.createElement('style')
-    style.innerHTML = `@keyframes glitch {
-        0% { transform: translate(0);} 
-        20% { transform: translate(-2px,2px); }
-        40% { transform: translate(-2px,-2px); }
-        60% { transform: translate(2px,2px); }
-        80% { transform: translate(2px,-2px); }
-        100% { transform: translate(0);} 
-      }`
-    document.head.appendChild(style)
-    return () => {
-      document.head.removeChild(style)
+    setScreenWidth(scrollContainerRef.current?.clientWidth ?? 0)
+    setScreenHeight(scrollContainerRef.current?.clientHeight ?? 0)
+
+    const handleResize = () => {
+      setScreenWidth(scrollContainerRef.current?.clientWidth ?? 0)
+      setScreenHeight(scrollContainerRef.current?.clientHeight ?? 0)
     }
+
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
   }, [])
 
-  // Core logic: ensure only the current video is playing & visible
-  useEffect(() => {
-    const cur = refs[current].current
-    const next = refs[1 - current].current
+  const y = useTransform(scrollYProgress, [0, 1], ['100%', '-50%'])
+  const rotate = useTransform(scrollYProgress, [0, 1], [45, 90])
+  const scale = useTransform(scrollYProgress, [0, 1], [1, 0], {
+    ease: cubicBezier(0.11, 0, 0.7, -0.018),
+  })
+  const bg = useTransform(scrollYProgress, [0, 1], ['#FFA500', '#FFF'])
+  const blur = useTransform(scrollYProgress, [0, 1], ['blur(0px)', 'blur(8px)'], {
+    ease: cubicBezier(0.7, 0, 0.84, 0),
+  })
+  const opacity = useTransform(scrollYProgress, [0, 1], [0, 1], {
+    ease: cubicBezier(0.11, 0, 0.7, -0.018),
+  })
+  const paneW = useTransform(scrollYProgress, [0, 1], [0, Math.max(screenWidth, screenHeight)], {
+    ease: cubicBezier(0.11, 0, 0.7, -0.018),
+  })
+  const vidFrame = useTransform(scrollYProgress, [0, 1], [0, 8])
 
-    if (!cur || !next) return
-
-    // Prepare current video
-    addClass(cur, 'visible')
-    removeClass(cur, 'glitch')
-    cur.playbackRate = 1
-    cur.play().catch(() => {})
-
-    // Hide & pause the other one
-    removeClass(next, 'visible')
-    removeClass(next, 'glitch')
-    next.pause()
-
-    // Listener that checks when we should start the transition
-    const handleTimeUpdate = () => {
-      if (!cur.duration || isNaN(cur.duration)) return
-
-      // Start transition when 1 second remains
-      if (cur.duration - cur.currentTime <= 1) {
-        // Remove this listener – we'll reattach when videos swap
-        cur.removeEventListener('timeupdate', handleTimeUpdate)
-        startTransition()
-      }
+  useMotionValueEvent(vidFrame, 'change', (val) => {
+    if (video1Ref.current) {
+      video1Ref.current.currentTime = val
     }
-
-    cur.addEventListener('timeupdate', handleTimeUpdate)
-
-    return () => {
-      cur.removeEventListener('timeupdate', handleTimeUpdate)
+    if (video2Ref.current) {
+      video2Ref.current.currentTime = val
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current])
-
-  // Handles the glitch transition between videos
-  const startTransition = () => {
-    const curIdx = current
-    const nextIdx = 1 - curIdx
-    const cur = refs[curIdx].current
-    const next = refs[nextIdx].current
-    if (!cur || !next) return
-
-    // Reset next video to start and make it visible (but underneath glitch overlay)
-    next.currentTime = 0
-    next.playbackRate = 0.2
-    addClass(next, 'visible')
-
-    // Apply glitch to both
-    addClass(cur, 'glitch')
-    addClass(next, 'glitch')
-
-    // After short delay, swap the videos & clean up classes
-    setTimeout(() => {
-      removeClass(cur, 'visible')
-      removeClass(cur, 'glitch')
-      cur.pause()
-      removeClass(next, 'glitch')
-
-      // Start playing the next video
-      next.playbackRate = 1
-      next.play().catch(() => {})
-
-      // Swap state – kicks off new effect cycle
-      setCurrent(nextIdx as 0 | 1)
-    }, 500) // duration of glitch effect
-  }
+  })
 
   return (
-    <Box position="relative" w="100vw" h="100vh" aspectRatio="16/9" overflow="hidden" bg="orange">
-      <Video
-        src="/video/spinning-asteroid1.mp4"
-        ref={video1Ref}
-        muted
-        preload="auto"
-        playsInline
+    <StyledMotion
+      ref={scrollContainerRef}
+      position="absolute"
+      top="0"
+      left="0"
+      w="100vw"
+      h="100vh"
+      overflow="scroll"
+      background="radial-gradient(circle, transparent 20%, rgba(0,0,0,0.2) 100%)"
+    >
+      <Box position="fixed" inset="0" pointerEvents="none" zIndex="1" />
+
+      <Box w="100vw" h="100dvh" position="relative" mixBlendMode="multiply"></Box>
+      <Box w="100vw" h="100dvh" mixBlendMode="multiply" position="relative"></Box>
+      <Box w="100vw" h="100dvh" mixBlendMode="multiply" position="relative"></Box>
+      <Box w="100vw" h="100dvh" mixBlendMode="multiply" position="relative"></Box>
+
+      <StyledMotion zIndex="2" style={{ y: -y }}>
+        <Center>
+          <Stack w="full" maxW="376px" gap="8">
+            <styled.h1
+              pos="relative"
+              fontFamily="majorMono"
+              fontSize="4xl"
+              fontWeight="extrabold"
+              color="white"
+              zIndex="2"
+            >
+              ABout Me
+            </styled.h1>
+            <styled.p>
+              I'm driven by a mix of curiosity and anxiety — a restless fascination with the way
+              complexity gives way to simplicity, and how beauty tends to emerge right at that edge.
+              Early on, I fell in love with electronic music and interface design. I became obsessed
+              with the tools — not just what they could do, but how they could shape ideas,
+              expression, and interaction.
+            </styled.p>
+            <styled.p>
+              My technical skills didn’t come from a traditional path. They came from the need to
+              bring creativity to life. I didn’t set out to be a developer — I just wanted to make
+              things. And in the process, I discovered that what really drives me is solving
+              problems. That’s the common thread in most creative work: understanding something
+              deeply enough to shape it, challenge it, or make it sing.
+            </styled.p>
+            <styled.p>
+              The web became my medium — a space where I could explore systems, sound, design, and
+              behavior all at once. But over the last decade, I’ve come to care just as much about
+              the people I build with as the things I build. Relationships, trust, clarity — these
+              matter as much as code.
+            </styled.p>
+            <styled.p>
+              I try to bring people along with me: to coach, teach, and share what I’ve learned. I
+              move ahead only when I can help carry something heavier. I listen closely, because
+              often the most important things people say aren’t the ones they say directly.
+            </styled.p>
+            At the end of the day, I’m in it for those shared “wow” moments — the spark when
+            something clicks, when an idea takes shape, when the work matters to more than just me.
+          </Stack>
+        </Center>
+      </StyledMotion>
+
+      <StyledMotion
+        position="fixed"
+        inset={0}
+        w="full"
+        h="full"
+        mixBlendMode="multiply"
+        pointerEvents="none"
+        style={{ scale, filter: blur }}
+      >
+        <Video
+          src="/video/asteroid_cropped_keyframe1.mp4"
+          // src="/video/wireframe-asteroid4_cropped_keyframe1.mp4"
+          ref={video1Ref}
+          muted
+          preload="auto"
+          playsInline
+          loop
+          // autoPlay
+          mixBlendMode="normal"
+          filter="contrast(1.2)"
+        />
+      </StyledMotion>
+
+      <MotionCenter
+        bg="white"
         mixBlendMode="difference"
-        {...props}
+        position="fixed"
+        pointerEvents="none"
+        aspectRatio="1"
+        overflow="hidden"
+        style={{ width: paneW, rotate, x: '-50%', y: '-50%' }}
       />
-      <Video
-        src="/video/wireframe-asteroid.mp4"
-        ref={video2Ref}
-        muted
-        preload="auto"
-        playsInline
-        mixBlendMode="hard-light"
-        {...props}
-      />
-    </Box>
+    </StyledMotion>
   )
 }

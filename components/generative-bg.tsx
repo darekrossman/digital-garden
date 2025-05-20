@@ -110,7 +110,7 @@ export function GenerativeBg() {
     )
   }
   return (
-    <Box position="relative" h="100%" overflow="hidden">
+    <Box position="relative" h="100%" overflow="hidden" bg="red.600">
       {blockStyles.length > 0 && Array.from({ length: blockCount }).map((_, i) => renderBlock(i))}
 
       <ViewTransition name="fblock">

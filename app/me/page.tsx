@@ -1,4 +1,5 @@
 import { AsteroidVideo } from '@/components/asteroid-video'
+import { GenerativeBg } from '@/components/generative-bg'
 import { Box, styled } from '@/styled-system/jsx'
 import Link from 'next/link'
 import { unstable_ViewTransition as ViewTransition } from 'react'
@@ -15,21 +16,7 @@ export default function Me() {
         alignItems="center"
         bg="orange"
       >
-        <styled.h1
-          pos="relative"
-          fontFamily="majorMono"
-          fontSize="4xl"
-          fontWeight="extrabold"
-          color="white"
-          // mixBlendMode="difference"
-          zIndex="2"
-        >
-          ABout Me
-        </styled.h1>
-
-        <Box pos="absolute" top="50%" left="50%" transform="translate(-50%, -50%)" zIndex="1">
-          <AsteroidVideo />
-        </Box>
+        <AsteroidVideo />
 
         <styled.p
           position="absolute"

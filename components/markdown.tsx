@@ -11,7 +11,8 @@ interface MarkdownProps {
 }
 
 // const colors = ['black', 'blue', 'green', 'red', 'yellow', 'gray', ]
-const colors = ['black', 'gray', 'blue']
+// const colors = ['black', 'orange.700', 'fuchsia.700', 'cyan.200', 'lime.700']
+const colors = ['white', 'black']
 
 /**
  * Convert markdown string to React components
@@ -19,9 +20,15 @@ const colors = ['black', 'gray', 'blue']
 export function Markdown({ children }: MarkdownProps) {
   // Save makeWild and only update when children changes
   const [makeWild, setMakeWild] = useState(() => Math.random() < 1)
+
   useEffect(() => {
-    setMakeWild(Math.random() < 0.2)
+    setMakeWild(Math.random() < 0.4)
   }, [children])
+
+  const randomColor = () => {
+    const colorToken = colors[getRandomInt(0, colors.length - 1)]
+    return token(`colors.${colorToken}` as Token)
+  }
 
   return (
     <ReactMarkdown
@@ -30,13 +37,13 @@ export function Markdown({ children }: MarkdownProps) {
           return (
             <styled.h1
               {...props}
+              fontFamily="pixel"
               style={
                 makeWild
                   ? {
                       fontSize: '100px',
                       lineHeight: '80px',
-                      fontFamily: token('fonts.pixel'),
-                      color: 'red',
+                      color: Math.random() < 0.05 ? 'gray' : 'black',
                     }
                   : {}
               }
@@ -66,15 +73,15 @@ export function Markdown({ children }: MarkdownProps) {
           )
         },
         h3: ({ children, node, ...props }) => {
-          return <styled.h3 {...props}>{children}</styled.h3>
+          return (
+            <styled.h3 {...props} fontFamily="pixel">
+              {children}
+            </styled.h3>
+          )
         },
         h4: ({ children, node, ...props }) => {
           return (
-            <styled.h4
-              {...props}
-              fontFamily="pixel"
-              style={{ color: colors[getRandomInt(0, colors.length - 1)] }}
-            >
+            <styled.h4 {...props} fontFamily="pixel" style={{ color: randomColor() }}>
               {children}
             </styled.h4>
           )
@@ -87,9 +94,11 @@ export function Markdown({ children }: MarkdownProps) {
           return (
             <styled.p
               {...props}
+              fontFamily="mono"
               style={{
+                color: randomColor(),
                 opacity: Math.random() * 0.2 + 1,
-                lineHeight: `${getRandomInt(95, 105)}%`,
+                lineHeight: makeWild ? '95%' : '100%',
                 transform: Math.random() < 0.01 ? 'scaleX(20)' : 'none',
               }}
             >
@@ -100,23 +109,15 @@ export function Markdown({ children }: MarkdownProps) {
 
         pre: ({ children, node, ...props }) => {
           return (
-            <styled.pre
-              {...props}
-              lineHeight="1"
-              fontFamily="mono"
-              bg="var(--prebg)"
-              style={{
-                ['--prebg' as string]: Math.random() < 0.05 ? 'black' : 'transparent',
-              }}
-            >
+            <styled.pre {...props} lineHeight="1" fontFamily="mono" textWrap="auto">
               {children}
             </styled.pre>
           )
         },
 
         code: ({ children }) => {
-          const bg = colors[getRandomInt(0, colors.length - 1)]
-          const fg = bg === 'yellow' ? 'black' : 'white'
+          const bg = Math.random() < 0.05 ? 'black' : 'white'
+          const fg = bg === 'black' ? 'white' : 'black'
 
           return (
             <styled.code
@@ -127,10 +128,12 @@ export function Markdown({ children }: MarkdownProps) {
                 bg: 'var(--bg)',
                 color: 'var(--fg)',
               })}
-              style={{
-                ['--bg' as string]: bg,
-                ['--fg' as string]: fg,
-              }}
+              style={
+                {
+                  ['--bg']: bg,
+                  ['--fg']: fg,
+                } as React.CSSProperties
+              }
             >
               {children}
             </styled.code>
