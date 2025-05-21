@@ -30,12 +30,7 @@ export default function LLMBlock({
   const [currentText, setCurrentText] = useState(content)
 
   // Messages passed to the canvas, derived from currentText
-  const [messages, setMessages] = useState([
-    {
-      role: 'user' as const,
-      content: buildPrompt(currentText),
-    },
-  ])
+  const [message, setMessage] = useState(buildPrompt(currentText))
 
   // Add a key to force LLMCanvas to rerun when regeneration is triggered
   const [regenerateKey, setRegenerateKey] = useState(0)
@@ -44,7 +39,7 @@ export default function LLMBlock({
   const [showImage, setShowImage] = useState(false)
 
   const glitchProbability = showImage ? 0.1 : 0.05
-  const imageProbability = 0
+  const imageProbability = 0.3
   // Ref for the root container so we can apply glitch effects directly
   const rootRef = useRef<HTMLDivElement>(null)
   const glitchIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -97,8 +92,10 @@ export default function LLMBlock({
       if (Math.random() < glitchProbability) {
         const dx = getRandomInt(-2, 1)
         const dy = getRandomInt(-1, 2)
+        const skewX = getRandomInt(-1, 0) // random skew between -5 and 5 degrees
+        const skewY = getRandomInt(0, 1)
         if (Math.random() < 0.5) {
-          el.style.transform = `translate(${dx}px, ${dy}px)`
+          el.style.transform = `translate(${dx}px, ${dy}px) skew(${skewX}deg)`
         }
       } else {
         el.style.transform = originalStylesRef.current?.transform || ''
@@ -133,12 +130,7 @@ export default function LLMBlock({
     if (shouldRegenerate && !isStreaming && !isPaused) {
       setIsStreaming(true)
       onRegenerationStart()
-      setMessages([
-        {
-          role: 'user',
-          content: buildPrompt(currentText),
-        },
-      ])
+      setMessage(buildPrompt(currentText))
       setRegenerateKey((k) => k + 1)
     }
   }, [shouldRegenerate, isStreaming, currentText, onRegenerationStart, isPaused])
@@ -185,7 +177,7 @@ export default function LLMBlock({
     >
       <styled.div ref={rootRef}>
         <LLMCanvas
-          messages={messages}
+          message={message}
           regenerateKey={regenerateKey}
           onComplete={(txt) => {
             setCurrentText(txt)

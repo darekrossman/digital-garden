@@ -2,7 +2,7 @@ import { wireframeColors } from './constants'
 
 export const defaultConfig = {
   isPaused: false,
-  regenerateInterval: 8000,
+  regenerateInterval: 4000,
 
   // Wireframe
   wireframe: {
@@ -22,8 +22,8 @@ export const defaultConfig = {
 
   // Blocks
   blocks: {
-    count: 12,
-    regenerateCount: 4,
+    count: 16,
+    regenerateCount: 6,
     positionRange: { min: -10, max: 90 },
     scaleRange: { min: 0.6, max: 2.6 },
     widthRange: { min: 10, max: 30 },

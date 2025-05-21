@@ -22,8 +22,9 @@ export function Markdown({ children }: MarkdownProps) {
   const [makeWild, setMakeWild] = useState(() => Math.random() < 1)
 
   useEffect(() => {
+    console.log('setting makeWild')
     setMakeWild(Math.random() < 0.4)
-  }, [children])
+  }, [])
 
   const randomColor = () => {
     const colorToken = colors[getRandomInt(0, colors.length - 1)]

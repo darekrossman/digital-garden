@@ -8,7 +8,13 @@ import { unstable_ViewTransition as ViewTransition } from 'react'
 export default function Home() {
   return (
     <ViewTransition enter="glitch-in" exit="glitch-out">
-      <Box h="100dvh" position="relative" display="flex" flexDirection="column" bg="white">
+      <Box
+        h="100dvh"
+        position="relative"
+        display="flex"
+        flexDirection="column"
+        background="radial-gradient(circle, transparent 20%, rgba(0,0,0,0.2) 100%)"
+      >
         <GenerativeBg />
       </Box>
     </ViewTransition>

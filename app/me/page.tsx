@@ -1,5 +1,4 @@
 import { AsteroidVideo } from '@/components/asteroid-video'
-import { GenerativeBg } from '@/components/generative-bg'
 import { Box, styled } from '@/styled-system/jsx'
 import Link from 'next/link'
 import { unstable_ViewTransition as ViewTransition } from 'react'
@@ -14,7 +13,7 @@ export default function Me() {
         flexDirection="column"
         justifyContent="center"
         alignItems="center"
-        bg="orange"
+        bg="red.600"
       >
         <AsteroidVideo />
 

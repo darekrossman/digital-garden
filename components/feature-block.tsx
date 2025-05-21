@@ -14,7 +14,7 @@ export function FeatureBlock({
   const [[columns, rows], setGridFactors] = useState([32, 32])
   const [chosenCells, setChosenCells] = useState<number[]>([])
   const [intervalDuration, setIntervalDuration] = useState(250)
-  const [gap, setGap] = useState(0)
+  const [gap, setGap] = useState('0px')
   const intervalRef = useRef<{ clear: () => void; id: NodeJS.Timeout } | null>(null)
 
   const cellCount = rows * columns
@@ -31,8 +31,10 @@ export function FeatureBlock({
       transform="translate(-50%, -50%)"
       width="376px"
       height="376px"
-      overflow="scroll"
+      // overflow="scroll"
       zIndex="20"
+      // mixBlendMode="multiply"
+      // bg="purple"
     >
       <Grid
         position="absolute"
@@ -88,13 +90,13 @@ export function FeatureBlock({
               key={i}
               bg="black"
               transition="all 0.1s"
-              style={
-                {
-                  transform: isChosen ? 'scale(0.7)' : 'scale(1)',
-                  backgroundColor: isChosen ? 'black' : 'black',
-                  borderRadius: isChosen ? '100%' : '0',
-                } as React.CSSProperties
-              }
+              // style={
+              //   {
+              //     transform: isChosen ? 'scale(0.7)' : 'scale(1)',
+              //     backgroundColor: isChosen ? 'black' : 'black',
+              //     borderRadius: isChosen ? '100%' : '0',
+              //   } as React.CSSProperties
+              // }
             />
           )
         })}

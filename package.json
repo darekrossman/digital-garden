@@ -12,6 +12,8 @@
   "dependencies": {
     "@ai-sdk/fal": "^0.1.11",
     "@ai-sdk/openai": "^1.3.22",
+    "@ai-sdk/react": "^1.2.12",
+    "@ai-sdk/togetherai": "^0.2.14",
     "@fal-ai/client": "^1.4.0",
     "@huggingface/inference": "^3.13.0",
     "@huggingface/transformers": "^3.5.1",

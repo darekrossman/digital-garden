@@ -85,8 +85,14 @@ export function GenerativeBg() {
 
   const renderBlock = (i: number) => {
     const style = blockStyles[i]
-
+    console.log(i)
     const styleObj = {
+      // top: 40,
+      // left: 40,
+      // right: 40,
+      // bottom: 40,
+      // width: '376px',
+
       backgroundColor: style.bg,
       top: style.top,
       left: style.left,
@@ -94,7 +100,7 @@ export function GenerativeBg() {
       width: `${style.width}vw`,
       fontFamily: token(`fonts.${style.fontFamily}` as Token),
       filter: `blur(${style.scale < 1 ? Math.floor((1 - style.scale) * 5) : 0}px)`,
-      transform: `scale(${style.scale}) rotateX(${style.rotateX}deg) rotateY(${style.rotateY}deg) rotateZ(${style.rotateZ}deg)`,
+      transform: `scale(${1}) rotateX(${style.rotateX}deg) rotateY(${style.rotateY}deg) rotateZ(${style.rotateZ}deg)`,
     }
 
     return (
@@ -110,7 +116,7 @@ export function GenerativeBg() {
     )
   }
   return (
-    <Box position="relative" h="100%" overflow="hidden" bg="red.600">
+    <Box position="relative" h="100%" overflow="hidden" bg="blue.600" mixBlendMode="multiply">
       {blockStyles.length > 0 && Array.from({ length: blockCount }).map((_, i) => renderBlock(i))}
 
       <ViewTransition name="fblock">
