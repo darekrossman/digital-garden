@@ -90,7 +90,7 @@ export function AsteroidVideo(props: HTMLStyledProps<'video'>) {
     // return () => clearInterval(interval)
   }, [])
 
-  const baseColor = 'rgb(65, 65, 65)'
+  const baseColor = 'rgb(43, 43, 43)'
 
   return (
     <StyledMotion
@@ -239,14 +239,14 @@ export function AsteroidVideo(props: HTMLStyledProps<'video'>) {
           style={{ scale: bigScale, filter: blur, opacity, x: '-50%', y: '-50%' }}
         /> */}
 
-        <Box
+        {/* <Box
           position="absolute"
           inset="0"
           pointerEvents="none"
           zIndex="2"
           mixBlendMode="saturation"
           style={{ backgroundColor: baseColor }}
-        />
+        /> */}
       </StyledMotion>
 
       <MotionCenter

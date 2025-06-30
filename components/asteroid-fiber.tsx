@@ -4,7 +4,10 @@ import { AsciiRenderer, Effects, Outlines, useGLTF } from '@react-three/drei'
 import { Canvas, extend, useFrame, useLoader, useThree } from '@react-three/fiber'
 import {
   Bloom,
+  ChromaticAberration,
   EffectComposer,
+  Grid,
+  Noise,
   Scanline,
   Select,
   SelectiveBloom,
@@ -60,8 +63,8 @@ function Scene(props: AsteroidProps) {
 
   useFrame((state) => {
     if (rockRef.current) {
-      rockRef.current.rotation.y += 0.0004
-      rockRef.current.rotation.x += 0.00005
+      rockRef.current.rotation.y += 0.0001
+      rockRef.current.rotation.x += 0.00002
     }
 
     // state.gl.setClearColor(0x000000, 0)
@@ -97,30 +100,30 @@ function Scene(props: AsteroidProps) {
         scale={1}
       />
 
-      <ambientLight ref={ambientLightRef} color="white" intensity={0.4} />
+      <ambientLight ref={ambientLightRef} color="white" intensity={0.1} />
       <directionalLight
         ref={lightRef}
         color={props.directionalLight?.color ?? 'white'}
-        position={[-6, 30, -25]}
-        intensity={11.2}
+        position={[-6, 30, -20]}
+        intensity={16}
       />
 
       <EffectComposer>
         <SelectiveBloom
           luminanceThreshold={0.1}
-          intensity={0.9}
+          luminanceSmoothing={0.1}
+          intensity={1}
           mipmapBlur={true}
-          levels={5}
-          radius={0.9}
+          levels={3}
+          radius={1}
           lights={[lightRef as any]}
           selection={[rockRef as any]}
         />
-        {/* <Scanline density={1.25} blendFunction={BlendFunction.ADD} /> */}
+
+        {/* <Scanline density={1.25} blendFunction={BlendFunction.SCREEN} /> */}
       </EffectComposer>
 
       {/* <Postpro /> */}
-
-      {/* <color attach="background" args={['#00000000']} /> */}
     </>
   )
 }
@@ -128,17 +131,18 @@ function Scene(props: AsteroidProps) {
 export default function AsteroidFiber(props: AsteroidProps) {
   return (
     <Canvas
-      linear
+      // linear
       flat
       legacy
       style={{ width: '100vw', height: '100vh', pointerEvents: 'none', filter: 'grayscale(1)' }}
       camera={{ fov: 90, near: 0.1, far: 1000, position: [0, 0, 2] }}
       dpr={[2, 2]}
-      // gl={{
-      //   alpha: true,
-      //   premultipliedAlpha: false,
-      //   antialias: true,
-      // }}
+      shadows={true}
+      gl={{
+        // alpha: true,
+        // premultipliedAlpha: false,
+        antialias: true,
+      }}
     >
       <Scene {...props} />
     </Canvas>
@@ -165,7 +169,7 @@ export function Model({ ref, ...props }: any) {
           normalMap={props.normalMap}
           roughnessMap={props.roughnessMap}
           aoMap={props.aoMap}
-          // roughness={0.9}
+          // roughness={2}
           // metalness={0.1}
         />
       </mesh>
@@ -183,11 +187,11 @@ function Postpro() {
     <Effects disableGamma>
       {/* <waterPass ref={water} factor={1} /> */}
       {/* @ts-ignore */}
-      <unrealBloomPass args={[undefined, 0.8, 1, 0.1]} oldClearAlpha={1} />
+      {/* <unrealBloomPass args={[undefined, 0.8, 1, 0.1]} oldClearAlpha={1} /> */}
       {/* @ts-ignore */}
       <filmPass args={[0.4, 0.5, 1500, false]} />
       {/* @ts-ignore */}
-      <lUTPass lut={data.texture} intensity={0.75} />
+      {/* <lUTPass lut={data.texture} intensity={1} /> */}
     </Effects>
   )
 }
