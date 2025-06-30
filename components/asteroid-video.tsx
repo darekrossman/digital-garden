@@ -1,6 +1,16 @@
 'use client'
 
-import { Box, Center, HTMLStyledProps, Stack, styled } from '@/styled-system/jsx'
+import {
+  Box,
+  Center,
+  Circle,
+  Grid,
+  HStack,
+  HTMLStyledProps,
+  Stack,
+  styled,
+} from '@/styled-system/jsx'
+import { token } from '@/styled-system/tokens'
 import {
   MotionValue,
   cubicBezier,
@@ -11,14 +21,17 @@ import {
   useTransform,
 } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
+import Asteroid from './asteroid'
+import AsteroidFiber from './asteroid-fiber'
+import { GenerativeBgAlt } from './generative-bg-alt'
+import { ImageFrame } from './image-frame'
 
 // Define a styled video element that we can easily control with classes
-const Video = styled('video', {
+const Video = styled(motion.video, {
   base: {
     position: 'absolute',
     top: '50%',
     left: '50%',
-    transform: 'translate(-50%, -50%)',
     w: '400px',
     aspectRatio: '1/1',
     maxHeight: '100vh',
@@ -40,90 +53,44 @@ const MotionCenter = styled(StyledMotion, {
 export function AsteroidVideo(props: HTMLStyledProps<'video'>) {
   const video1Ref = useRef<HTMLVideoElement>(null)
   const video2Ref = useRef<HTMLVideoElement>(null)
+  const video3Ref = useRef<HTMLVideoElement>(null)
   const refs = [video1Ref, video2Ref]
   const [current, setCurrent] = useState<0 | 1>(0)
 
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const { scrollY, scrollYProgress } = useScroll({
     container: scrollContainerRef,
-    // target: scrollContainerRef,
   })
-
-  const [screenWidth, setScreenWidth] = useState(0)
-  const [screenHeight, setScreenHeight] = useState(0)
-
-  useEffect(() => {
-    setScreenWidth(scrollContainerRef.current?.clientWidth ?? 0)
-    setScreenHeight(scrollContainerRef.current?.clientHeight ?? 0)
-
-    const handleResize = () => {
-      setScreenWidth(scrollContainerRef.current?.clientWidth ?? 0)
-      setScreenHeight(scrollContainerRef.current?.clientHeight ?? 0)
-    }
-
-    let reverseAnimationFrame: number | null = null
-    const startTime = 2
-    const maxStep = 1 / 12 // Fastest at the start
-    const minStep = 1 / 64 // Slowest at the end
-    const reversePlayback = () => {
-      const video = video1Ref.current
-      if (video) {
-        if (video.currentTime > 0) {
-          const t = Math.max(0, video.currentTime / startTime) // 1 to 0
-          const ease = t * t * t // cubic ease-out
-          const step = minStep + (maxStep - minStep) * ease
-          video.currentTime = Math.max(0, video.currentTime - step)
-          reverseAnimationFrame = requestAnimationFrame(reversePlayback)
-        } else {
-          video.currentTime = 0
-          if (reverseAnimationFrame) cancelAnimationFrame(reverseAnimationFrame)
-        }
-      }
-    }
-
-    if (video1Ref.current) {
-      video1Ref.current.currentTime = startTime
-      // Start reverse playback
-      reversePlayback()
-    }
-
-    window.addEventListener('resize', handleResize)
-    return () => {
-      window.removeEventListener('resize', handleResize)
-      if (reverseAnimationFrame) cancelAnimationFrame(reverseAnimationFrame)
-    }
-  }, [])
 
   const y = useTransform(scrollYProgress, [0, 1], ['100%', '-50%'])
   const rotate = useTransform(scrollYProgress, [0, 1], [45, 90])
   const scale = useTransform(scrollYProgress, [0, 1], [1, 0], {
     ease: cubicBezier(0.11, 0, 0.7, -0.018),
   })
-  const bg = useTransform(scrollYProgress, [0, 1], ['#FFA500', '#FFF'])
-  const blur = useTransform(scrollYProgress, [0, 1], ['blur(0px)', 'blur(8px)'], {
-    ease: cubicBezier(0.7, 0, 0.84, 0),
-  })
-  const opacity = useTransform(scrollYProgress, [0, 1], [0, 1], {
+  const bigScale = useTransform(scrollYProgress, [0, 1], [1, 4], {
     ease: cubicBezier(0.11, 0, 0.7, -0.018),
   })
-  const paneW = useTransform(
-    scrollYProgress,
-    [0, 1],
-    [0, Math.max(screenWidth * 2, screenHeight * 2)],
-    {
-      ease: cubicBezier(0.11, 0, 0.7, -0.018),
-    },
-  )
-  const vidFrame = useTransform(scrollYProgress, [0, 1], [0, 8])
-
-  useMotionValueEvent(vidFrame, 'change', (val) => {
-    if (video1Ref.current) {
-      video1Ref.current.currentTime = val
-    }
-    if (video2Ref.current) {
-      video2Ref.current.currentTime = val
-    }
+  const bg = useTransform(scrollYProgress, [0, 1], ['#FFA500', '#FFF'])
+  const blur = useTransform(scrollYProgress, [0, 1], ['blur(0px)', 'blur(20px)'], {
+    ease: cubicBezier(0.7, 0, 0.84, 0),
   })
+  const opacity = useTransform(scrollYProgress, [0, 1], [1, 0], {
+    ease: cubicBezier(0.11, 0, 0.7, -0.018),
+  })
+  const opacityUp = useTransform(scrollYProgress, [0, 1], [0, 1], {
+    ease: cubicBezier(0.11, 0, 0.7, -0.018),
+  })
+
+  const [regenKey, setRegenKey] = useState(0)
+
+  useEffect(() => {
+    // const interval = setInterval(() => {
+    //   setRegenKey((prev) => prev + 1)
+    // }, 500)
+    // return () => clearInterval(interval)
+  }, [])
+
+  const baseColor = 'rgb(65, 65, 65)'
 
   return (
     <StyledMotion
@@ -134,9 +101,13 @@ export function AsteroidVideo(props: HTMLStyledProps<'video'>) {
       w="100vw"
       h="100vh"
       overflow="scroll"
-      background="radial-gradient(circle, transparent 20%, rgba(0,0,0,0.2) 100%)"
+      // backgroundImage={`radial-gradient(circle, rgba(0,0,0,0), rgba(0, 0, 0, 1) 50%), url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=)`}
+      backgroundSize="cover"
+      backgroundPosition="center"
+      backgroundRepeat="no-repeat"
+      style={{ background: baseColor }}
     >
-      <MotionCenter zIndex="3" position="fixed">
+      <MotionCenter zIndex="4" position="fixed" pointerEvents="none">
         <motion.div
           initial={{ opacity: 0, x: 30 }}
           animate={{ opacity: 1, x: 0 }}
@@ -154,14 +125,9 @@ export function AsteroidVideo(props: HTMLStyledProps<'video'>) {
         </motion.div>
       </MotionCenter>
 
-      <Box position="fixed" inset="0" pointerEvents="none" zIndex="1" />
+      <Box w="100vw" h="500dvh" position="relative" zIndex="-1" />
 
-      <Box w="100vw" h="100dvh" position="relative" mixBlendMode="multiply"></Box>
-      <Box w="100vw" h="100dvh" mixBlendMode="multiply" position="relative"></Box>
-      <Box w="100vw" h="100dvh" mixBlendMode="multiply" position="relative"></Box>
-      <Box w="100vw" h="100dvh" mixBlendMode="multiply" position="relative"></Box>
-
-      <StyledMotion zIndex="2" style={{ y: -y }}>
+      <StyledMotion zIndex="4" style={{ y: y }}>
         <Center>
           <Stack w="full" maxW="376px" gap="8">
             {/* <styled.p>
@@ -198,37 +164,108 @@ export function AsteroidVideo(props: HTMLStyledProps<'video'>) {
         </Center>
       </StyledMotion>
 
+      <Box
+        position="fixed"
+        inset="0"
+        pointerEvents="none"
+        zIndex="2"
+        mixBlendMode="exclusion"
+        style={{ backgroundColor: '#4a2859' }}
+      />
+
       <StyledMotion
+        id="asteroid-wrapper"
         position="fixed"
         inset={0}
         w="full"
         h="full"
-        mixBlendMode="multiply"
+        zIndex="1"
         pointerEvents="none"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        style={{ scale, filter: blur }}
+        // style={{ scale: 1, filter: blur }}
       >
-        <Video
-          src="/video/asteroid_cropped_keyframe1.mp4"
-          // src="/video/wireframe-asteroid4_cropped_keyframe1.mp4"
-          ref={video1Ref}
+        <Center id="genbox" position="relative" zIndex="1" w="100vw" h="100vh">
+          {/* <HStack gap="8" h="full" alignItems="center" justifyItems="center">
+            <ImageFrame regenerateKey={regenKey + 1} key={1} />
+            <ImageFrame regenerateKey={regenKey + 2} key={2} />
+            <Box w="200px" />
+            <ImageFrame regenerateKey={regenKey + 3} key={3} />
+            <ImageFrame regenerateKey={regenKey + 4} key={4} />
+          </HStack> */}
+          {/* <Box bg="red" mr="50vw" w="50vw" h="100vh" /> */}
+        </Center>
+
+        <MotionCenter
+          zIndex="2"
+          style={{ filter: 'contrast(1.1)' }}
+          pointerEvents="none"
+          // mixBlendMode="exclusion"
+        >
+          <AsteroidFiber />
+        </MotionCenter>
+        {/* <MotionCenter zIndex="2" style={{ filter: 'contrast(1.1)' }}>
+          <Asteroid
+            autoRotate={true}
+            autoRotateAxes={['x', 'y', 'z']}
+            autoRotateSpeedX={0.001} // faster X rotation
+            autoRotateSpeedY={0.007} // medium Y rotation
+            autoRotateSpeedZ={0.003} // slower Z rotation
+            directionalLight={{
+              color: baseColor,
+              x: scale,
+              // y: lightY,
+              // z: lightZ,
+            }}
+            ambientLight={{ color: baseColor }}
+            // rotationY={tr}
+            width={900}
+          />
+        </MotionCenter> */}
+
+        {/* <Video
+          src="/video/Dithered Black May 22 1556 (2).mp4"
+          // src="/video/Dithered Black May 22.mp4"
+          ref={video3Ref}
+          autoPlay
+          loop
           muted
           preload="auto"
           playsInline
-          mixBlendMode="normal"
           filter="contrast(1.2)"
+          minW="100vw"
+          h="100vh"
+          mixBlendMode="saturation"
+          style={{ scale: bigScale, filter: blur, opacity, x: '-50%', y: '-50%' }}
+        /> */}
+
+        <Box
+          position="absolute"
+          inset="0"
+          pointerEvents="none"
+          zIndex="2"
+          mixBlendMode="saturation"
+          style={{ backgroundColor: baseColor }}
         />
       </StyledMotion>
 
       <MotionCenter
-        bg="blue.500"
-        mixBlendMode="multiply"
+        mixBlendMode="overlay"
         position="fixed"
         pointerEvents="none"
         aspectRatio="1"
         overflow="hidden"
-        style={{ width: paneW, rotate: 45, x: '-50%', y: '-50%' }}
+        zIndex="3"
+        bg="orange.400"
+        style={{
+          width: '200vw',
+          // scaleX: scale,
+          // scaleY: inverseScale,
+          opacity: opacityUp,
+          rotate: 45,
+          x: '-50%',
+          y: '-50%',
+        }}
       />
     </StyledMotion>
   )

@@ -22,7 +22,6 @@ export function Markdown({ children }: MarkdownProps) {
   const [makeWild, setMakeWild] = useState(() => Math.random() < 1)
 
   useEffect(() => {
-    console.log('setting makeWild')
     setMakeWild(Math.random() < 0.4)
   }, [])
 
@@ -44,7 +43,7 @@ export function Markdown({ children }: MarkdownProps) {
                   ? {
                       fontSize: '100px',
                       lineHeight: '80px',
-                      color: Math.random() < 0.05 ? 'gray' : 'black',
+                      color: Math.random() < 0.15 ? 'white' : 'black',
                     }
                   : {}
               }
@@ -117,7 +116,7 @@ export function Markdown({ children }: MarkdownProps) {
         },
 
         code: ({ children }) => {
-          const bg = Math.random() < 0.05 ? 'black' : 'white'
+          const bg = Math.random() < 0.5 ? 'black' : 'white'
           const fg = bg === 'black' ? 'white' : 'black'
 
           return (
@@ -131,8 +130,8 @@ export function Markdown({ children }: MarkdownProps) {
               })}
               style={
                 {
-                  ['--bg']: bg,
-                  ['--fg']: fg,
+                  ['--bg']: token(`colors.${bg}` as Token),
+                  ['--fg']: token(`colors.${fg}` as Token),
                 } as React.CSSProperties
               }
             >

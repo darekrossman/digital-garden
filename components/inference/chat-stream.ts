@@ -7,11 +7,13 @@ import { createStreamableValue } from 'ai/rsc'
 
 export async function generate(messages: CoreMessage[]) {
   const stream = createStreamableValue('')
-  ;(async () => {
+
+  const run = async () => {
     const { textStream } = streamText({
       model: togetherai('meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo'),
       system: getSystemPrompt(),
       messages,
+      maxTokens: 1000,
     })
 
     for await (const delta of textStream) {
@@ -19,5 +21,7 @@ export async function generate(messages: CoreMessage[]) {
     }
 
     stream.done()
-  })()
+  }
+
+  run()
 }

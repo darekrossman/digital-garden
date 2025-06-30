@@ -6,7 +6,7 @@ import { regenerateBlocks } from '@/lib/blockUtils'
 import { defaultConfig } from '@/lib/config'
 import { adjectives, defaultIntro } from '@/lib/constants'
 import { createClearableInterval, getRandomAdjective, getRandomSymbolicObject } from '@/lib/helpers'
-import { Box, styled } from '@/styled-system/jsx'
+import { Box, Grid, styled } from '@/styled-system/jsx'
 import { token } from '@/styled-system/tokens'
 import { Token } from '@/styled-system/tokens'
 import { BlockStyle } from '@/types'
@@ -49,57 +49,50 @@ export function GenerativeBg() {
   }, [blockCount])
 
   // Handle pause state changes
-  useEffect(() => {
-    if (isPaused) {
-      setBlocksToRegenerate(new Set<number>())
-    }
-  }, [isPaused])
+  // useEffect(() => {
+  //   if (isPaused) {
+  //     setBlocksToRegenerate(new Set<number>())
+  //   }
+  // }, [isPaused])
 
   // Manage regeneration interval
-  useEffect(() => {
-    if (isPaused) {
-      if (intervalRef.current) {
-        intervalRef.current.clear()
-        intervalRef.current = null
-      }
-      return
-    }
+  // useEffect(() => {
+  //   if (isPaused) {
+  //     if (intervalRef.current) {
+  //       intervalRef.current.clear()
+  //       intervalRef.current = null
+  //     }
+  //     return
+  //   }
 
-    // If not paused, (re)set up the interval
-    if (intervalRef.current) {
-      intervalRef.current.clear()
-    }
+  //   // If not paused, (re)set up the interval
+  //   if (intervalRef.current) {
+  //     intervalRef.current.clear()
+  //   }
 
-    intervalRef.current = createClearableInterval(() => {
-      const count = Math.min(defaultConfig.blocks.regenerateCount, blockCount)
-      setBlocksToRegenerate((current) => regenerateBlocks(current, count, blockCount))
-    }, defaultConfig.regenerateInterval)
+  //   intervalRef.current = createClearableInterval(() => {
+  //     const count = Math.min(defaultConfig.blocks.regenerateCount, blockCount)
+  //     setBlocksToRegenerate((current) => regenerateBlocks(current, count, blockCount))
+  //   }, defaultConfig.regenerateInterval)
 
-    return () => {
-      if (intervalRef.current) {
-        intervalRef.current.clear()
-        intervalRef.current = null
-      }
-    }
-  }, [isPaused, blockCount])
+  //   return () => {
+  //     if (intervalRef.current) {
+  //       intervalRef.current.clear()
+  //       intervalRef.current = null
+  //     }
+  //   }
+  // }, [isPaused, blockCount])
 
   const renderBlock = (i: number) => {
     const style = blockStyles[i]
-    console.log(i)
     const styleObj = {
-      // top: 40,
-      // left: 40,
-      // right: 40,
-      // bottom: 40,
-      // width: '376px',
-
       backgroundColor: style.bg,
       top: style.top,
       left: style.left,
       zIndex: style.zIndex,
       width: `${style.width}vw`,
       fontFamily: token(`fonts.${style.fontFamily}` as Token),
-      filter: `blur(${style.scale < 1 ? Math.floor((1 - style.scale) * 5) : 0}px)`,
+      // filter: `blur(${style.scale < 1 ? Math.floor((1 - style.scale) * 5) : 0}px)`,
       transform: `scale(${1}) rotateX(${style.rotateX}deg) rotateY(${style.rotateY}deg) rotateZ(${style.rotateZ}deg)`,
     }
 
@@ -115,27 +108,33 @@ export function GenerativeBg() {
       />
     )
   }
+
   return (
-    <Box position="relative" h="100%" overflow="hidden" bg="blue.600" mixBlendMode="multiply">
-      {blockStyles.length > 0 && Array.from({ length: blockCount }).map((_, i) => renderBlock(i))}
+    <Box h="100dvh" position="relative" display="flex" flexDirection="column" bg="white">
+      <Grid gridTemplateColumns="1fr 1fr" position="relative" flex="1" overflow="hidden" gap={0}>
+        <Box position="relative">
+          {/* {blockStyles.length > 0 &&
+            Array.from({ length: blockCount }).map((_, i) => renderBlock(i))} */}
 
-      <ViewTransition name="fblock">
-        <FeatureBlock ref={containerRef} isPaused={isPaused} />
-      </ViewTransition>
+          <RandomGeometry isPaused={isPaused} />
+        </Box>
 
-      <RandomGeometry isPaused={isPaused} />
+        <ViewTransition name="fblock">
+          <FeatureBlock ref={containerRef} isPaused={isPaused} />
+        </ViewTransition>
 
-      <Box pos="fixed" bottom="0" right="0" zIndex="99999">
-        <styled.button
-          bg="black"
-          color="white"
-          py="1"
-          px="2"
-          onClick={() => setIsPaused(!isPaused)}
-        >
-          {isPaused ? 'resume' : 'pause'}
-        </styled.button>
-      </Box>
+        <Box pos="fixed" bottom="0" right="0" zIndex="99999">
+          <styled.button
+            bg="black"
+            color="white"
+            py="1"
+            px="2"
+            onClick={() => setIsPaused(!isPaused)}
+          >
+            {isPaused ? 'resume' : 'pause'}
+          </styled.button>
+        </Box>
+      </Grid>
     </Box>
   )
 }

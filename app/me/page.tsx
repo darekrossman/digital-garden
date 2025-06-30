@@ -1,3 +1,4 @@
+import Asteroid from '@/components/asteroid'
 import { AsteroidVideo } from '@/components/asteroid-video'
 import { Box, styled } from '@/styled-system/jsx'
 import Link from 'next/link'
@@ -13,7 +14,6 @@ export default function Me() {
         flexDirection="column"
         justifyContent="center"
         alignItems="center"
-        bg="red.600"
       >
         <AsteroidVideo />
 

@@ -2,13 +2,13 @@ import { wireframeColors } from './constants'
 
 export const defaultConfig = {
   isPaused: false,
-  regenerateInterval: 4000,
+  regenerateInterval: 5000,
 
   // Wireframe
   wireframe: {
     type: null,
     segments: 10,
-    glitchIntensity: 1,
+    glitchIntensity: 0,
     wireframeColor: '#ffffff',
     colors: wireframeColors, // Available colors for random selection
     positionRanges: {
@@ -22,11 +22,11 @@ export const defaultConfig = {
 
   // Blocks
   blocks: {
-    count: 16,
-    regenerateCount: 6,
+    count: 1,
+    regenerateCount: 1,
     positionRange: { min: -10, max: 90 },
-    scaleRange: { min: 0.6, max: 2.6 },
-    widthRange: { min: 10, max: 30 },
+    scaleRange: { min: 0.6, max: 4.6 },
+    widthRange: { min: 10, max: 60 },
     distributionFactor: 3,
     rotateZProbability: 0.15,
   },

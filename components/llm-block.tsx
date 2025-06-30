@@ -39,7 +39,7 @@ export default function LLMBlock({
   const [showImage, setShowImage] = useState(false)
 
   const glitchProbability = showImage ? 0.1 : 0.05
-  const imageProbability = 0.3
+  const imageProbability = 1
   // Ref for the root container so we can apply glitch effects directly
   const rootRef = useRef<HTMLDivElement>(null)
   const glitchIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -137,7 +137,7 @@ export default function LLMBlock({
 
   useEffect(() => {
     setShowImage(Math.random() < imageProbability)
-    setImageWidth(Math.random() * 375 + 100)
+    // setImageWidth(Math.random() * 375 + 100)
   }, [regenerateKey])
 
   if (showImage) {
@@ -167,14 +167,7 @@ export default function LLMBlock({
   }
 
   return (
-    <Box
-      maxHeight="100vh"
-      position="absolute"
-      transformOrigin="center"
-      transition="none"
-      style={style}
-      {...props}
-    >
+    <Box style={style} {...props}>
       <styled.div ref={rootRef}>
         <LLMCanvas
           message={message}

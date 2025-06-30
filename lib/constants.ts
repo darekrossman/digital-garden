@@ -100,7 +100,7 @@ export const symbolicObjects = [
  * Default intro text for the portfolio
  */
 export const defaultIntro = {
-  heading: "I'm Darek.",
+  heading: 'Darek Rossman',
   paragraphs: [
     "I live in St. Pete, FL where I've been working on physical and digital creations for the last two decades",
     'I adapt to complexity and I strive for simplicity. I design for clarity and I build for scale. I lead with curiosity and I ask deeper questions',
