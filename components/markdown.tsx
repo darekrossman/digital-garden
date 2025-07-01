@@ -2,12 +2,13 @@ import { getRandomFontFamily, getRandomInt } from '@/lib/helpers'
 import { css } from '@/styled-system/css'
 import { styled } from '@/styled-system/jsx'
 import { Token, token } from '@/styled-system/tokens'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 
 interface MarkdownProps {
   children: string
   className?: string
+  regenerateKey: number
 }
 
 // const colors = ['black', 'blue', 'green', 'red', 'yellow', 'gray', ]
@@ -17,7 +18,7 @@ const colors = ['white', 'black']
 /**
  * Convert markdown string to React components
  */
-export function Markdown({ children }: MarkdownProps) {
+export function Markdown({ regenerateKey, children }: MarkdownProps) {
   // Save makeWild and only update when children changes
   const [makeWild, setMakeWild] = useState(() => Math.random() < 1)
 
@@ -25,10 +26,14 @@ export function Markdown({ children }: MarkdownProps) {
     setMakeWild(Math.random() < 0.4)
   }, [])
 
-  const randomColor = () => {
+  const randomFont = useMemo(() => {
+    return token(`fonts.${getRandomFontFamily({ majorMono: 0.2, mono: 0.8 })}` as Token)
+  }, [regenerateKey])
+
+  const randomColor = useMemo(() => {
     const colorToken = colors[getRandomInt(0, colors.length - 1)]
     return token(`colors.${colorToken}` as Token)
-  }
+  }, [regenerateKey])
 
   return (
     <ReactMarkdown
@@ -43,7 +48,9 @@ export function Markdown({ children }: MarkdownProps) {
                   ? {
                       fontSize: '100px',
                       lineHeight: '80px',
-                      color: Math.random() < 0.15 ? 'white' : 'black',
+                      color: regenerateKey % 2 === 0 ? 'white' : 'black',
+                      textWrap: 'balance',
+                      whiteSpace: 'nowrap',
                     }
                   : {}
               }
@@ -57,9 +64,7 @@ export function Markdown({ children }: MarkdownProps) {
             <styled.h2
               {...props}
               style={{
-                fontFamily: token(
-                  `fonts.${getRandomFontFamily({ majorMono: 0.2, mono: 0.8 })}` as Token,
-                ),
+                fontFamily: randomFont,
                 ...(makeWild && {
                   fontSize: '88px',
                   lineHeight: '80px',
@@ -81,7 +86,7 @@ export function Markdown({ children }: MarkdownProps) {
         },
         h4: ({ children, node, ...props }) => {
           return (
-            <styled.h4 {...props} fontFamily="pixel" style={{ color: randomColor() }}>
+            <styled.h4 {...props} fontFamily="pixel" style={{ color: randomColor }}>
               {children}
             </styled.h4>
           )
@@ -96,7 +101,7 @@ export function Markdown({ children }: MarkdownProps) {
               {...props}
               fontFamily="mono"
               style={{
-                color: randomColor(),
+                color: randomColor,
                 opacity: Math.random() * 0.2 + 1,
                 lineHeight: makeWild ? '95%' : '100%',
                 transform: Math.random() < 0.01 ? 'scaleX(20)' : 'none',
@@ -109,14 +114,20 @@ export function Markdown({ children }: MarkdownProps) {
 
         pre: ({ children, node, ...props }) => {
           return (
-            <styled.pre {...props} lineHeight="1" fontFamily="mono" textWrap="auto">
+            <styled.pre
+              {...props}
+              lineHeight="1.1em"
+              fontSize="sm"
+              fontFamily="mono"
+              textWrap="auto"
+            >
               {children}
             </styled.pre>
           )
         },
 
         code: ({ children }) => {
-          const bg = Math.random() < 0.5 ? 'black' : 'white'
+          const bg = regenerateKey % 2 === 0 ? 'black' : 'white'
           const fg = bg === 'black' ? 'white' : 'black'
 
           return (

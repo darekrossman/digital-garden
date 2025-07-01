@@ -39,7 +39,7 @@ export default function LLMBlock({
   const [showImage, setShowImage] = useState(false)
 
   const glitchProbability = showImage ? 0.1 : 0.05
-  const imageProbability = 1
+  const imageProbability = 0
   // Ref for the root container so we can apply glitch effects directly
   const rootRef = useRef<HTMLDivElement>(null)
   const glitchIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)

@@ -49,6 +49,10 @@ export function ImageFrame({ prompt, onComplete, regenerateKey }: ImageFrameProp
   })
 
   useEffect(() => {
+    if (Math.random() < 0.8) {
+      return
+    }
+
     const defaultPrompt = `lo-fi, esoteric, techno-code, ${getRandomAdjective()}, black ${getRandomSymbolicObject()} with transparent white background. image should be contained in the bounds of the frame and not be cropped, include stream of machine code, jagged interruptions, strange perspectives.`
     console.log(defaultPrompt)
     console.time(`image generation ${regenerateKey}`)
@@ -76,8 +80,8 @@ export function ImageFrame({ prompt, onComplete, regenerateKey }: ImageFrameProp
       width="1024"
       height="1024"
       className={css({
-        w: '260px',
-        h: '260px',
+        w: '160px',
+        h: '160px',
         borderRadius: 'full',
         overflow: 'hidden',
         filter: 'grayscale(1)',

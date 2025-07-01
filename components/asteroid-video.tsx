@@ -21,10 +21,11 @@ import {
   useTransform,
 } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
-import Asteroid from './asteroid'
+// import Asteroid from './asteroid'
 import AsteroidFiber from './asteroid-fiber'
-import { GenerativeBgAlt } from './generative-bg-alt'
+// import { GenerativeBgAlt } from './generative-bg-alt'
 import { ImageFrame } from './image-frame'
+import { LLMCanvas } from './llm-canvas'
 
 // Define a styled video element that we can easily control with classes
 const Video = styled(motion.video, {
@@ -84,13 +85,16 @@ export function AsteroidVideo(props: HTMLStyledProps<'video'>) {
   const [regenKey, setRegenKey] = useState(0)
 
   useEffect(() => {
-    // const interval = setInterval(() => {
-    //   setRegenKey((prev) => prev + 1)
-    // }, 500)
-    // return () => clearInterval(interval)
+    const interval = setInterval(() => {
+      if (Math.random() < 0.1) {
+        console.log('regen!')
+        setRegenKey((prev) => prev + 1)
+      }
+    }, 500)
+    return () => clearInterval(interval)
   }, [])
 
-  const baseColor = 'rgb(43, 43, 43)'
+  const baseColor = 'rgb(95, 95, 95)'
 
   return (
     <StyledMotion
@@ -186,23 +190,47 @@ export function AsteroidVideo(props: HTMLStyledProps<'video'>) {
         // style={{ scale: 1, filter: blur }}
       >
         <Center id="genbox" position="relative" zIndex="1" w="100vw" h="100vh">
-          {/* <HStack gap="8" h="full" alignItems="center" justifyItems="center">
-            <ImageFrame regenerateKey={regenKey + 1} key={1} />
-            <ImageFrame regenerateKey={regenKey + 2} key={2} />
+          <HStack
+            gap="8"
+            h="full"
+            alignItems="center"
+            justifyItems="center"
+            position="absolute"
+            top="50%"
+            left="50%"
+            transform="translate(-50%, -300px)"
+          >
+            {/* <ImageFrame regenerateKey={regenKey + 1} key={1} /> */}
+            {/* <ImageFrame regenerateKey={regenKey + 2} key={2} />
             <Box w="200px" />
             <ImageFrame regenerateKey={regenKey + 3} key={3} />
-            <ImageFrame regenerateKey={regenKey + 4} key={4} />
-          </HStack> */}
+            <ImageFrame regenerateKey={regenKey + 4} key={4} /> */}
+          </HStack>
           {/* <Box bg="red" mr="50vw" w="50vw" h="100vh" /> */}
+          <HStack gap="8" h="full" alignItems="center" justifyItems="center">
+            <Box w="460px" textAlign="right">
+              <LLMCanvas
+                message={`I'm driven by a mix of curiosity and anxiety — a restless fascination with the way
+              complexity gives way to simplicity, and how beauty tends to emerge right at that edge.
+              Early on, I fell in love with electronic music and interface design. I became obsessed
+              with the tools — not just what they could do, but how they could shape ideas,
+              expression, and interaction.`}
+                regenerateKey={regenKey}
+                onComplete={() => {}}
+              />
+            </Box>
+            <Box w="460px">
+              <LLMCanvas
+                message={`I've gone completely mad. I have answers with no questions.`}
+                regenerateKey={regenKey + 1}
+                onComplete={() => {}}
+              />
+            </Box>
+          </HStack>
         </Center>
 
-        <MotionCenter
-          zIndex="2"
-          style={{ filter: 'contrast(1.1)' }}
-          pointerEvents="none"
-          // mixBlendMode="exclusion"
-        >
-          <AsteroidFiber />
+        <MotionCenter zIndex="2" style={{ filter: 'contrast(1.1)' }} pointerEvents="none">
+          <AsteroidFiber size={680} />
         </MotionCenter>
         {/* <MotionCenter zIndex="2" style={{ filter: 'contrast(1.1)' }}>
           <Asteroid
@@ -239,14 +267,14 @@ export function AsteroidVideo(props: HTMLStyledProps<'video'>) {
           style={{ scale: bigScale, filter: blur, opacity, x: '-50%', y: '-50%' }}
         /> */}
 
-        {/* <Box
+        <Box
           position="absolute"
           inset="0"
           pointerEvents="none"
           zIndex="2"
           mixBlendMode="saturation"
           style={{ backgroundColor: baseColor }}
-        /> */}
+        />
       </StyledMotion>
 
       <MotionCenter

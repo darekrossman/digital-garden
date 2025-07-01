@@ -1,7 +1,7 @@
 'use server'
 
 import { getSystemPrompt } from '@/lib/promptUtils'
-import { togetherai } from '@ai-sdk/togetherai'
+import { openai } from '@ai-sdk/openai'
 import { CoreMessage, streamText } from 'ai'
 import { createStreamableValue } from 'ai/rsc'
 
@@ -10,10 +10,10 @@ export async function generate(messages: CoreMessage[]) {
 
   const run = async () => {
     const { textStream } = streamText({
-      model: togetherai('meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo'),
+      model: openai('gpt-4o-mini'),
       system: getSystemPrompt(),
       messages,
-      maxTokens: 1000,
+      maxTokens: 2000,
     })
 
     for await (const delta of textStream) {

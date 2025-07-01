@@ -36,7 +36,9 @@ export function getSystemPrompt(): string {
 
   const jsonMaker = `Randomly incorporate formatted json snippets from the json text \`${mejson}\` in  your responses. When you do, ensure that the JSON is valid and properly escaped. The JSON should be wrapped in markdown code blocks.`
 
-  const prompts = [onlyAscii]
+  const promptOptions = [rewriter, wacky, onlyAscii]
+
+  const prompts = [promptOptions[Math.floor(Math.random() * promptOptions.length)]]
 
   if (Math.random() < 0.1) {
     prompts.push(jsonMaker)

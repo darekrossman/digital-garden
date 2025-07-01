@@ -17,7 +17,7 @@ export function LLMCanvas({
 }: {
   message: string
   onComplete?: (result: string) => void
-  regenerateKey?: string | number
+  regenerateKey: number
 }) {
   const [previousGeneration, setPreviousGeneration] = useState<string>('')
   const [currentGeneration, setCurrentGeneration] = useState<string>('')
@@ -32,47 +32,21 @@ export function LLMCanvas({
 
   const { completion, complete } = useCompletion({
     api: '/api/completion',
+    // experimental_throttle: 50,
     onFinish: (prompt, completion) => {
+      setCurrentGeneration(completion)
       onComplete?.(completion)
+      setIsTransitioning(false)
     },
   })
 
   useEffect(() => {
-    complete(message)
+    if (isTransitioning) return
+
+    setIsTransitioning(true)
+    complete(currentGeneration || message)
     setFontScale(getRandomInt(10, 200) / 100)
   }, [regenerateKey])
-
-  // Handle the word-by-word transition effect
-  // useEffect(() => {
-  //   if (!isTransitioning) return
-
-  //   // Split text into words for transition
-  //   const prevWords = previousGeneration.split(/\s+/)
-  //   const newWords = currentGeneration.split(/\s+/)
-
-  //   // Calculate how many words to replace
-  //   const totalWords = prevWords.length
-  //   const newWordsCount = newWords.length
-
-  //   // Replace more words as we get more new content
-  //   const replacementRatio = Math.min(1, newWordsCount / Math.max(10, totalWords))
-  //   const wordsToReplace = Math.ceil(totalWords * replacementRatio)
-
-  //   // Create the transition text by replacing words gradually
-  //   let transitionWords = [...prevWords]
-  //   for (let i = 0; i < wordsToReplace && i < newWordsCount; i++) {
-  //     transitionWords[i] = newWords[i]
-  //   }
-
-  //   // If we have more new words than previous, add them
-  //   if (newWordsCount > wordsToReplace) {
-  //     transitionWords = transitionWords.concat(newWords.slice(wordsToReplace))
-  //   }
-
-  //   setDisplayText(transitionWords.join(' '))
-  // }, [previousGeneration, currentGeneration, isTransitioning])
-
-  const numbers = completion.split(' ').map(Number)
 
   return (
     <Box position="relative">
@@ -81,10 +55,11 @@ export function LLMCanvas({
         position="relative"
         zIndex="1"
         style={{
+          transform: `scale(${fontScale})`,
           fontSize: `${fontScale}em`,
         }}
       >
-        <Markdown>{completion}</Markdown>
+        <Markdown regenerateKey={regenerateKey}>{completion || currentGeneration}</Markdown>
       </Stack>
     </Box>
   )
