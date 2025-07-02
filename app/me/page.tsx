@@ -24,6 +24,7 @@ export default function Me() {
           fontSize="sm"
           fontFamily="pixel"
           textAlign="center"
+          zIndex="1"
         >
           <Link href="/">take me home</Link>
         </styled.p>

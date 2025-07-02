@@ -3,9 +3,12 @@
 import { defaultIntro } from '@/lib/constants'
 import { createClearableInterval } from '@/lib/helpers'
 import { Box, Center, Flex, Grid, Stack, styled } from '@/styled-system/jsx'
+import { motion } from 'motion/react'
 import Link from 'next/link'
 import { startTransition, useEffect, useRef, useState } from 'react'
 import Scrambler from './scrambler'
+
+const Video = styled(motion.video)
 
 export function FeatureBlock({
   ref,
@@ -23,7 +26,26 @@ export function FeatureBlock({
   const cellHeight = blockSize / rows
 
   return (
-    <Box ref={ref} position="relative" zIndex="1" bg="red.500">
+    <Box ref={ref} position="relative" zIndex="1" h="full">
+      {/* <Video
+        src="/video/Black Background Animation May 22 (1).mp4"
+        autoPlay
+        loop
+        muted
+        preload="auto"
+        playsInline
+        position="absolute"
+        top="0"
+        left="0"
+        w="auto"
+        h="100vh"
+        objectFit="cover"
+        objectPosition="left"
+        filter="contrast(0.5)"
+        transformOrigin="left"
+        mixBlendMode="hue"
+      /> */}
+
       <Flex
         pos="relative"
         w="360px"

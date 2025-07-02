@@ -6,17 +6,21 @@ import { regenerateBlocks } from '@/lib/blockUtils'
 import { defaultConfig } from '@/lib/config'
 import { adjectives, defaultIntro } from '@/lib/constants'
 import { createClearableInterval, getRandomAdjective, getRandomSymbolicObject } from '@/lib/helpers'
-import { Box, Grid, styled } from '@/styled-system/jsx'
+import { Box, Center, Grid, styled } from '@/styled-system/jsx'
 import { token } from '@/styled-system/tokens'
 import { Token } from '@/styled-system/tokens'
 import { BlockStyle } from '@/types'
+import { motion } from 'motion/react'
 import { useEffect, useState } from 'react'
 import { useCallback } from 'react'
 import { useRef } from 'react'
 import { unstable_ViewTransition as ViewTransition } from 'react'
 import { FeatureBlock } from './feature-block'
 import LLMBlock from './llm-block'
+import { LLMUI } from './llm-ui'
 import { RandomGeometry } from './random-geometry'
+
+const Video = styled(motion.video)
 
 export function GenerativeBg() {
   const blockCount = defaultConfig.blocks.count
@@ -109,21 +113,64 @@ export function GenerativeBg() {
     )
   }
 
+  const videos = [
+    '/video/Black and White Esoteric Grid Patterns Video.mp4',
+    '/video/Black and White Grid Video.mp4',
+    '/video/Black Background Animation May 22.mp4',
+    '/video/color.mp4',
+    '/video/Dithered Black May 22 1556.mp4',
+    '/video/Dithered Black May 22 1556 (2).mp4',
+    '/video/Dithered Black May 22 1556 (3).mp4',
+    '/video/Dithered Black May 22 1556.mp4',
+    '/video/Dithered Black May 22.mp4',
+  ]
+
   return (
     <Box h="100dvh" position="relative" display="flex" flexDirection="column" bg="white">
       <Grid gridTemplateColumns="1fr 1fr" position="relative" flex="1" overflow="hidden" gap={0}>
-        <Box position="relative">
-          {/* {blockStyles.length > 0 &&
-            Array.from({ length: blockCount }).map((_, i) => renderBlock(i))} */}
+        <Center position="relative" zIndex="2">
+          <Center
+            w="full"
+            maxWidth="440px"
+            maxHeight="100vh"
+            justifyContent="flex-end"
+            overflow="hidden"
+          >
+            <LLMUI pause={isPaused} />
+          </Center>
+        </Center>
 
-          <RandomGeometry isPaused={isPaused} />
+        <Video
+          // src="/video/Black and White Grid Video.mp4"
+          src={videos[8]}
+          autoPlay
+          loop
+          muted
+          preload="auto"
+          playsInline
+          position="absolute"
+          top="0"
+          left="0"
+          w="100vw"
+          h="100vh"
+          objectFit="cover"
+          objectPosition="center"
+          filter="contrast(1.2)"
+          transformOrigin="left"
+          pointerEvents="none"
+        />
+
+        <Box
+          position="relative"
+          zIndex="2"
+          bg="#b8b8b8"
+          mixBlendMode="difference"
+          backdropFilter="blur(10px)"
+        >
+          <FeatureBlock ref={containerRef} isPaused={isPaused} />
         </Box>
 
-        <ViewTransition name="fblock">
-          <FeatureBlock ref={containerRef} isPaused={isPaused} />
-        </ViewTransition>
-
-        <Box pos="fixed" bottom="0" right="0" zIndex="99999">
+        <Box pos="fixed" bottom="0" left="0" zIndex="99999">
           <styled.button
             bg="black"
             color="white"

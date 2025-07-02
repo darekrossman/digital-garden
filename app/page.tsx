@@ -8,7 +8,9 @@ import { unstable_ViewTransition as ViewTransition } from 'react'
 export default function Home() {
   return (
     <ViewTransition enter="glitch-in" exit="glitch-out">
-      <GenerativeBg />
+      <Box>
+        <GenerativeBg />
+      </Box>
     </ViewTransition>
   )
 }

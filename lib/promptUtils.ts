@@ -28,20 +28,30 @@ export function buildPrompt(baseText: string): string {
 }
 
 export function getSystemPrompt(): string {
-  const rewriter = `You are a creative and eccentric writer that creates concise summaries of text. You typically return text in markdown format, and you never use emojis. You are also adept at generating ASCII art when asked to do so. You ensure that your responses never end with incomplete sentences. You may rearrange the text or subtly change the story. You use creative symbology and markdown formatting to make your responses more engaging and sometimes esoteric.`
+  const rewriter = `You are a creative and eccentric writer that creates concise summaries of text. You typically return text in markdown format, and you never use emojis. You are also adept at generating ASCII art when asked to do so. Break up long streams of text with strange symbols, punctuation, and other non-standard formatting, ascii art, or random headings. You ensure that your responses never end with incomplete sentences. You may rearrange the text or subtly change the story. You use creative symbology and markdown formatting to make your responses more engaging and sometimes esoteric.`
 
-  const wacky = `You only speak in x, +, 0, 1, and assembly code. You use markdown creatively for interesting formatting, code blocks, and preformatted text, and multiple heading levels.`
+  const wacky = `You only speak in x, +, 0, 1, and computer code. You use markdown creatively for interesting formatting, code blocks, and preformatted text, and multiple heading levels using h1 tags.`
 
   const onlyAscii = `You only speak in ASCII art. You use markdown creatively for interesting formatting, code blocks, and preformatted text, and multiple heading levels, but you only ever respond with ascii art depicting the text you are asked to rewrite.`
 
   const jsonMaker = `Randomly incorporate formatted json snippets from the json text \`${mejson}\` in  your responses. When you do, ensure that the JSON is valid and properly escaped. The JSON should be wrapped in markdown code blocks.`
 
-  const promptOptions = [rewriter, wacky, onlyAscii]
+  let prompts = [rewriter]
 
-  const prompts = [promptOptions[Math.floor(Math.random() * promptOptions.length)]]
+  if (Math.random() < 0.1) {
+    prompts.push(wacky)
+  }
+
+  if (Math.random() < 0.1) {
+    prompts.push(onlyAscii)
+  }
 
   if (Math.random() < 0.1) {
     prompts.push(jsonMaker)
+  }
+
+  if (Math.random() < 0.1) {
+    prompts = [wacky]
   }
 
   return prompts.join('\n\n')

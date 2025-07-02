@@ -2,7 +2,7 @@
 
 :root {
   --global-font-body: var(--fonts-mono);
-  --glitch-duration: 1000ms;
+  --glitch-duration: 20000ms;
 }
 
 html {
@@ -157,11 +157,11 @@ html {
 /* Glitchy view transition styles */
 ::view-transition-old(.glitch-out) {
   animation:
-    glitch-blink 200ms steps(1) var(--glitch-duration),
-    glitch-jitter 150ms steps(1) var(--glitch-duration),
-    glitch-skew 250ms steps(1) var(--glitch-duration),
-    glitch-scale 300ms steps(1) var(--glitch-duration),
-    glitch-blur 400ms steps(1) var(--glitch-duration),
+    glitch-blink 200ms steps(4) var(--glitch-duration),
+    glitch-jitter 150ms steps(4) var(--glitch-duration),
+    glitch-skew 250ms steps(4) var(--glitch-duration),
+    glitch-scale 300ms steps(4) var(--glitch-duration),
+    glitch-blur 400ms steps(4) var(--glitch-duration),
     glitch-hue-rotate 500ms linear var(--glitch-duration);
   animation-delay: 0ms, 0ms, 0ms, 0ms, 0ms, 0ms;
   animation-fill-mode: both;

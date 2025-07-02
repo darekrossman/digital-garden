@@ -2,65 +2,88 @@
 
 import { generate } from '@/components/inference/chat-stream'
 import { getRandomInt } from '@/lib/helpers'
-import { Box, Stack, styled } from '@/styled-system/jsx'
+import { Box, Circle, Stack, styled } from '@/styled-system/jsx'
 import { useCompletion } from '@ai-sdk/react'
 import { readStreamableValue } from 'ai/rsc'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ChatCompletionMessageParam } from 'openai/src/resources.js'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { startTransition, useCallback, useEffect, useRef, useState } from 'react'
+import { ImageFrame } from './image-frame'
 import { Markdown } from './markdown'
 
+const defaultPrompt = `I'm driven by a mix of curiosity and anxiety — a restless fascination with the way complexity gives way to simplicity, and how beauty tends to emerge right at that edge. Early on, I fell in love with electronic music and interface design. I became obsessed with the tools — not just what they could do, but how they could shape ideas, expression, and interaction. My technical skills didn't come from a traditional path. They came from the need to bring creativity to life. I didn't set out to be a developer — I just wanted to make things. And in the process, I discovered that what really drives me is solving problems. That's the common thread in most creative work: understanding something deeply enough to shape it, challenge it, or make it sing. The web became my medium — a space where I could explore systems, sound, design, and behavior all at once. But over the last decade, I've come to care just as much about the people I build with as the things I build. Relationships, trust, clarity — these matter as much as code. I try to bring people along with me: to coach, teach, and share what I've learned. I move ahead only when I can help carry something heavier. I listen closely, because often the most important things people say aren't the ones they say directly. At the end of the day, I'm in it for those shared "wow" moments — the spark when something clicks, when an idea takes shape, when the work matters to more than just me.`
+
 export function LLMCanvas({
-  message,
+  message = defaultPrompt,
   onComplete,
   regenerateKey,
+  pause = false,
+  align = 'left',
 }: {
-  message: string
+  message?: string
   onComplete?: (result: string) => void
-  regenerateKey: number
+  regenerateKey?: number
+  pause?: boolean
+  align?: 'left' | 'center' | 'right'
 }) {
-  const [previousGeneration, setPreviousGeneration] = useState<string>('')
-  const [currentGeneration, setCurrentGeneration] = useState<string>('')
-  const [isTransitioning, setIsTransitioning] = useState(false)
-  const [displayText, setDisplayText] = useState<string>('')
-  const fullGenerationRef = useRef<string>('')
-
-  const UPDATE_INTERVAL_MS = 10
-  const lastUpdateTimeRef = useRef<number>(0)
-
-  const [fontScale, setFontScale] = useState(1)
+  const intervalRef = useRef<NodeJS.Timeout | null>(null)
+  const currentCompletionRef = useRef<string>('')
+  const isGeneratingRef = useRef(false)
+  const regenKeyRef = useRef(regenerateKey || 0)
 
   const { completion, complete } = useCompletion({
     api: '/api/completion',
-    // experimental_throttle: 50,
+    body: {
+      maxTokens: Math.floor(Math.random() * 400) + 200,
+    },
     onFinish: (prompt, completion) => {
-      setCurrentGeneration(completion)
+      isGeneratingRef.current = false
+      currentCompletionRef.current = completion
       onComplete?.(completion)
-      setIsTransitioning(false)
     },
   })
 
-  useEffect(() => {
-    if (isTransitioning) return
+  const generate = (probability = 0.3) => {
+    if (isGeneratingRef.current) {
+      return
+    }
 
-    setIsTransitioning(true)
-    complete(currentGeneration || message)
-    setFontScale(getRandomInt(10, 200) / 100)
-  }, [regenerateKey])
+    if (Math.random() < probability) {
+      isGeneratingRef.current = true
+      regenKeyRef.current = regenerateKey ?? regenKeyRef.current + Math.floor(Math.random() * 100)
+      complete(currentCompletionRef.current || message || 'I think I am a computer.')
+    }
+  }
+
+  useEffect(() => {
+    generate(1)
+  }, [])
+
+  useEffect(() => {
+    if (pause && intervalRef.current) {
+      clearInterval(intervalRef.current)
+      intervalRef.current = null
+      return
+    }
+
+    intervalRef.current = setInterval(() => {
+      if (pause) return
+      generate()
+    }, 1500)
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
+    }
+  }, [pause])
 
   return (
     <Box position="relative">
-      <Stack
-        gap="2"
-        position="relative"
-        zIndex="1"
-        style={{
-          transform: `scale(${fontScale})`,
-          fontSize: `${fontScale}em`,
-        }}
-      >
-        <Markdown regenerateKey={regenerateKey}>{completion || currentGeneration}</Markdown>
-      </Stack>
+      <Markdown regenerateKey={regenKeyRef.current} align={align}>
+        {completion || currentCompletionRef.current}
+      </Markdown>
     </Box>
   )
 }

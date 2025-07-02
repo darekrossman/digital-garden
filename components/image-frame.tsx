@@ -60,7 +60,7 @@ export function ImageFrame({ prompt, onComplete, regenerateKey }: ImageFrameProp
       // model_name: 'runwayml/stable-diffusion-v1-5',
       // model_name: 'stabilityai/stable-diffusion-xl-base-1.0',
       prompt: prompt || defaultPrompt,
-      num_inference_steps: 6,
+      num_inference_steps: 10,
       guidance_scale: 2,
       sync_mode: true,
       // seed: 123 + (regenerateKey ?? 0),

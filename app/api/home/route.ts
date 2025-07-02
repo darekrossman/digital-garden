@@ -25,41 +25,26 @@ export async function POST(req: Request) {
     prompt,
     maxTokens,
     systemPrompt,
-    model: userModel,
   }: {
     prompt: string
     maxTokens?: number
     systemPrompt?: string
-    model?: string
   } = await req.json()
 
-  const system =
-    systemPrompt ||
-    `${getSystemPrompt()}\n\nYou never use emojis. You never include confirmation language or follow up questions. You always focus purely on the result and nothing else.`
-
-  let model
-
-  if (userModel === 'gpt-4.1') {
-    model = openai('gpt-4.1')
-  } else {
-    const openaiModel = Math.random() < 0.5 ? openai('gpt-4.1') : openai('gpt-4.1-nano')
-    const togetherModel = togetherai(models[getRandomInt(0, models.length - 1)])
-
-    model = Math.random() < 0.33 ? togetherModel : openaiModel
-  }
+  const model = openai('gpt-4.1')
 
   console.log(model.modelId)
 
   const result = streamText({
     model,
-    system,
+    system: systemPrompt,
     prompt,
     maxTokens: maxTokens ?? 600,
     temperature: 0.9,
-    experimental_transform: smoothStream({
-      delayInMs: 10, // optional: defaults to 10ms
-      chunking: 'line',
-    }),
+    // experimental_transform: smoothStream({
+    //   delayInMs: 10,
+    //   chunking: 'line',
+    // }),
     onError({ error }) {
       console.error(error)
     },

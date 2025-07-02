@@ -2,28 +2,45 @@
 
 import { useGLTF } from '@react-three/drei'
 import { Canvas, extend, useFrame, useLoader, useThree } from '@react-three/fiber'
-import { Bloom, EffectComposer } from '@react-three/postprocessing'
-import { useEffect, useRef } from 'react'
-import * as THREE from 'three'
-import { FilmPass, LUTPass, UnrealBloomPass, WaterPass } from 'three-stdlib'
+import {
+  Bloom,
+  EffectComposer,
+  Noise,
+  SelectiveBloom,
+  ToneMapping,
+} from '@react-three/postprocessing'
+import { BlendFunction, ToneMappingMode } from 'postprocessing'
+import { useEffect, useRef, useState } from 'react'
+import { AmbientLight, DirectionalLight, Group, PerspectiveCamera, TextureLoader } from 'three'
+import { Mesh } from 'three'
+import { FilmPass, LUTPass, ShaderPass, UnrealBloomPass, WaterPass } from 'three-stdlib'
+import { degToRad } from 'three/src/math/MathUtils.js'
 import { AsteroidProps } from './asteroid'
 
 extend({ WaterPass, UnrealBloomPass, FilmPass, LUTPass })
 
-function Scene(props: AsteroidProps) {
-  const rockRef = useRef<THREE.Group>(null)
-  const lightRef = useRef<THREE.DirectionalLight>(null)
-  const light = useRef<THREE.PointLight>(null)
-  const ambientLightRef = useRef<THREE.AmbientLight>(null)
-  const gl = useThree((state) => state.gl)
+function Scene(props: AsteroidProps & { size?: number }) {
+  const rockRef = useRef<Group>(null)
+  const lightRef = useRef<DirectionalLight>(null)
+  const ambientLightRef = useRef<AmbientLight>(null)
+  const { viewport, camera } = useThree()
 
-  // Set clear color to transparent
+  const [initialHeight, setInitialHeight] = useState(0)
+
   useEffect(() => {
-    gl.setClearColor(0x000000, 0) // black with 0 alpha
-  }, [gl])
+    setInitialHeight(window.innerHeight)
+  }, [])
+
+  useEffect(() => {
+    // const c = camera as PerspectiveCamera
+    // c.fov = (window.innerHeight / initialHeight) * 30
+    // c.aspect = window.innerWidth / window.innerHeight
+
+    lightRef.current!.shadow.camera.far = 3000
+  }, [viewport])
 
   const [colorMap, normalMap, displacementMap, roughnessMap, aoMap, specularLevelMap, specularMap] =
-    useLoader(THREE.TextureLoader, [
+    useLoader(TextureLoader, [
       '/textures/Rock Face 03 Diff 1k.png',
       '/textures/Rock Face 03 Normal Gloss 1k.png',
       '/textures/Rock Face 03 Displacement 1k.png',
@@ -51,32 +68,39 @@ function Scene(props: AsteroidProps) {
   useFrame((state) => {
     const mouse = mouseRef.current
 
-    // distance from center
-    const dx = mouse.x - 0.5
-    const dy = mouse.y - 0.5
-    const distFromCenter = Math.sqrt(dx * dx + dy * dy) // 0 (center) to ~0.707 (corner)
-    console.log(distFromCenter)
+    // Distance and direction from the centre (-0.5 → 0.5 range)
+    const dx = mouse.x - 0.5 // –0.5 (left) → 0.5 (right)
+    const dy = mouse.y - 0.5 // –0.5 (top)  → 0.5 (bottom)
+    const distFromCenter = Math.sqrt(dx * dx + dy * dy) // 0 (centre) → ~0.707 (corner)
+
+    // Tune how aggressively the mouse influences the rotation
+    const MAX_SPEED = 0.003 // radians / frame at furthest corner
+    const speed = distFromCenter * MAX_SPEED
 
     if (rockRef.current) {
-      rockRef.current.rotation.y += 0.0002
-      rockRef.current.rotation.x += 0.00008
+      rockRef.current.rotation.y += MAX_SPEED
+      rockRef.current.rotation.z += dy * speed * 2
     }
 
     if (lightRef.current) {
-      // Map mouse position to directional light x/y
-      // Example: x in [-10, 10], y in [-10, 10]
-      // const lightX = (mouse.x - 0.5) * 20
-      // const lightY = (0.5 - mouse.y) * 20
-      // Map distance to z: at center, z = -20 (far), at edge, z = 0 (close)
-      // const lightZ = 1 + dist * -20
-      // lightRef.current.position.x = lightX
-      // lightRef.current.position.y = lightY
-      // lightRef.current.position.z = lightZ
+      lightRef.current.position.x = dx * 50
     }
   })
 
+  const modelScale = 0.22
+
   return (
     <>
+      <ambientLight ref={ambientLightRef} color="white" intensity={0.08} />
+      <directionalLight
+        ref={lightRef}
+        color={props.directionalLight?.color ?? 'white'}
+        position={[0, 490, 0]}
+        intensity={15}
+        castShadow
+        shadow-mapSize={[4056, 4056]}
+      />
+
       <Model
         ref={rockRef}
         map={colorMap}
@@ -84,19 +108,16 @@ function Scene(props: AsteroidProps) {
         roughnessMap={roughnessMap}
         displacementMap={displacementMap}
         aoMap={aoMap}
-        scale={1}
+        scale={modelScale}
       />
 
-      <ambientLight ref={ambientLightRef} color="white" intensity={0.08} />
-      <directionalLight
-        ref={lightRef}
-        color={props.directionalLight?.color ?? 'white'}
-        position={[-300, 500, -200]}
-        intensity={15}
-      />
+      {/* <Shadows position={[0, -0.3, 0]} rotation={[-degToRad(90), 0, 0]} /> */}
 
-      <EffectComposer>
-        <Bloom
+      {/* <fog color="#161616" attach="fog" near={8} far={30} args={[0, 0, 0]} /> */}
+
+      <EffectComposer multisampling={8}>
+        <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
+        <SelectiveBloom
           luminanceThreshold={0.1}
           luminanceSmoothing={0.025}
           intensity={0.9}
@@ -106,6 +127,7 @@ function Scene(props: AsteroidProps) {
           lights={[lightRef as any, ambientLightRef as any]}
           selection={[rockRef as any]}
         />
+        <Noise opacity={0.1} />
       </EffectComposer>
     </>
   )
@@ -123,19 +145,12 @@ export interface AsteroidFiberProps extends AsteroidProps {
 export default function AsteroidFiber(props: AsteroidFiberProps) {
   const { size, ...rest } = props
 
-  const canvasStyle = size
-    ? {
-        width: `${size}px`,
-        height: `${size}px`,
-        pointerEvents: 'none' as const,
-        filter: 'grayscale(1)',
-      }
-    : {
-        width: '100vw',
-        height: '100vh',
-        pointerEvents: 'none' as const,
-        filter: 'grayscale(1)',
-      }
+  const canvasStyle = {
+    width: '100vw',
+    height: '100vh',
+    pointerEvents: 'none' as const,
+    filter: 'grayscale(1)',
+  }
 
   return (
     <Canvas
@@ -143,7 +158,12 @@ export default function AsteroidFiber(props: AsteroidFiberProps) {
       flat
       legacy
       style={canvasStyle}
-      camera={{ fov: 90, near: 0.1, far: 1000, position: [0, 0, 2] }}
+      camera={{
+        fov: 30,
+        near: 0.1,
+        far: 3000,
+        position: [0, 0, 2],
+      }}
       dpr={[2, 2]}
       shadows={true}
       gl={{
@@ -152,7 +172,7 @@ export default function AsteroidFiber(props: AsteroidFiberProps) {
         antialias: true,
       }}
     >
-      <Scene {...rest} />
+      <Scene {...rest} size={size} />
     </Canvas>
   )
 }
@@ -165,7 +185,7 @@ export function Model({ ref, ...props }: any) {
       <mesh
         ref={ref}
         castShadow
-        receiveShadow
+        // receiveShadow
         // @ts-ignore
         geometry={nodes.tmpzfbzcugyply.geometry}
       >
@@ -182,6 +202,34 @@ export function Model({ ref, ...props }: any) {
         />
       </mesh>
     </group>
+  )
+}
+
+function Box(props: any) {
+  const ref = useRef<Mesh>(null)
+  const [hovered, hover] = useState(false)
+  return (
+    <mesh
+      {...props}
+      castShadow
+      ref={ref}
+      onPointerOver={(event) => hover(true)}
+      onPointerOut={(event) => hover(false)}
+    >
+      <boxGeometry args={[1, 1, 1]} />
+      <meshStandardMaterial color={hovered ? 'hotpink' : 'orange'} />
+    </mesh>
+  )
+}
+
+function Shadows(props: any) {
+  const { viewport } = useThree()
+  return (
+    <mesh receiveShadow scale={[viewport.width, viewport.height, 1]} {...props}>
+      <planeGeometry />
+      <shadowMaterial opacity={0.4} transparent={true} />
+      {/* <meshPhongMaterial color="#FFFFFF" /> */}
+    </mesh>
   )
 }
 
