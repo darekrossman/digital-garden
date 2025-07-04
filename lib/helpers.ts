@@ -172,3 +172,65 @@ export function getRandomAdjective(): string {
 export function getRandomSymbolicObject(): string {
   return symbolicObjects[getRandomInt(0, symbolicObjects.length - 1)]
 }
+
+/**
+ * Converts a hex color to SVG feColorMatrix values
+ * @param hex - Hex color string (e.g., "#FF0000", "#ff0000", "FF0000")
+ * @param alphaMatrix - Optional alpha transformation row (default: "0 0 0 1 0" for full opacity)
+ * @returns Color matrix values string for SVG feColorMatrix
+ */
+export function hexToColorMatrix(hex: string, alphaMatrix: string = '0 0 0 1 0'): string {
+  // Remove # if present and ensure uppercase
+  const cleanHex = hex.replace('#', '').toUpperCase()
+
+  // Parse hex to RGB
+  const r = parseInt(cleanHex.substring(0, 2), 16)
+  const g = parseInt(cleanHex.substring(2, 4), 16)
+  const b = parseInt(cleanHex.substring(4, 6), 16)
+
+  // Normalize to 0-1 range
+  const rNorm = r / 255
+  const gNorm = g / 255
+  const bNorm = b / 255
+
+  // Create color matrix
+  // Format: R G B A Offset
+  const matrix = [
+    `0 0 0 0 ${rNorm}`, // Red channel
+    `0 0 0 0 ${gNorm}`, // Green channel
+    `0 0 0 0 ${bNorm}`, // Blue channel
+    alphaMatrix, // Alpha channel
+  ]
+
+  return matrix.join('\n')
+}
+
+/**
+ * Converts RGB values to SVG feColorMatrix values
+ * @param r - Red value (0-255)
+ * @param g - Green value (0-255)
+ * @param b - Blue value (0-255)
+ * @param alphaMatrix - Optional alpha transformation row (default: "0 0 0 1 0" for full opacity)
+ * @returns Color matrix values string for SVG feColorMatrix
+ */
+export function rgbToColorMatrix(
+  r: number,
+  g: number,
+  b: number,
+  alphaMatrix: string = '0 0 0 1 0',
+): string {
+  // Normalize to 0-1 range
+  const rNorm = Math.max(0, Math.min(255, r)) / 255
+  const gNorm = Math.max(0, Math.min(255, g)) / 255
+  const bNorm = Math.max(0, Math.min(255, b)) / 255
+
+  // Create color matrix
+  const matrix = [
+    `0 0 0 0 ${rNorm}`, // Red channel
+    `0 0 0 0 ${gNorm}`, // Green channel
+    `0 0 0 0 ${bNorm}`, // Blue channel
+    alphaMatrix, // Alpha channel
+  ]
+
+  return matrix.join('\n')
+}

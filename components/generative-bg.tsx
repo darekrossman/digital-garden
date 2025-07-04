@@ -1,186 +1,333 @@
 'use client'
 
-import { generateInitialBlockStyles } from '@/lib/blockUtils'
-import { generateRandomBlockStyle } from '@/lib/blockUtils'
-import { regenerateBlocks } from '@/lib/blockUtils'
-import { defaultConfig } from '@/lib/config'
-import { adjectives, defaultIntro } from '@/lib/constants'
-import { createClearableInterval, getRandomAdjective, getRandomSymbolicObject } from '@/lib/helpers'
-import { Box, Center, Grid, styled } from '@/styled-system/jsx'
+import { hexToColorMatrix } from '@/lib/helpers'
+import { Box, Center, Flex, Grid, styled } from '@/styled-system/jsx'
 import { token } from '@/styled-system/tokens'
-import { Token } from '@/styled-system/tokens'
-import { BlockStyle } from '@/types'
+import {
+  Scope,
+  animate,
+  createAnimatable,
+  createDraggable,
+  createScope,
+  createSpring,
+  createTimer,
+  utils,
+} from 'animejs'
 import { motion } from 'motion/react'
+import Image from 'next/image'
 import { useEffect, useState } from 'react'
-import { useCallback } from 'react'
 import { useRef } from 'react'
 import { unstable_ViewTransition as ViewTransition } from 'react'
 import { FeatureBlock } from './feature-block'
-import LLMBlock from './llm-block'
-import { LLMUI } from './llm-ui'
-import { RandomGeometry } from './random-geometry'
-
-const Video = styled(motion.video)
+import { useLLMText } from './llm-ui'
+import { Markdown } from './llm-ui-markdown'
 
 export function GenerativeBg() {
-  const blockCount = defaultConfig.blocks.count
+  const [pause, setPause] = useState(false)
+  const [isUserScrolling, setIsUserScrolling] = useState(false)
+  const { currentCompletionRef, completion, regenKeyRef, onResponse, isLoading } = useLLMText({
+    pause: true,
+  })
 
-  const [isPaused, setIsPaused] = useState(defaultConfig.isPaused)
-  const [blocksToRegenerate, setBlocksToRegenerate] = useState(new Set<number>())
-  const [blockStyles, setBlockStyles] = useState<BlockStyle[]>([])
-  const intervalRef = useRef<ReturnType<typeof createClearableInterval> | null>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
+  const scope = useRef<Scope>(null)
+  const root = useRef<HTMLDivElement>(null)
+  const planeRef = useRef<HTMLDivElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
 
-  // Callback for when a block starts regeneration
-  const onBlockRegenerationStart = useCallback((blockIndex: number) => {
-    setBlocksToRegenerate((current) => {
-      const newSet = new Set(current)
-      newSet.delete(blockIndex)
-      return newSet
-    })
+  // Generate color matrix for the dust effect
+  const rootColor = token('colors.neutral.500')
+  const dustMatrix = hexToColorMatrix(rootColor, '0 0 0 -40 10')
 
-    setBlockStyles((currentStyles) => {
-      const updatedStyles = [...currentStyles]
-      updatedStyles[blockIndex] = generateRandomBlockStyle()
-      return updatedStyles
-    })
-  }, [])
-
-  // Generate random positions and scales for blocks on mount
-  useEffect(() => {
-    const styles = generateInitialBlockStyles(blockCount, () => generateRandomBlockStyle())
-    setBlockStyles(styles)
-  }, [blockCount])
-
-  // Handle pause state changes
-  // useEffect(() => {
-  //   if (isPaused) {
-  //     setBlocksToRegenerate(new Set<number>())
-  //   }
-  // }, [isPaused])
-
-  // Manage regeneration interval
-  // useEffect(() => {
-  //   if (isPaused) {
-  //     if (intervalRef.current) {
-  //       intervalRef.current.clear()
-  //       intervalRef.current = null
-  //     }
-  //     return
-  //   }
-
-  //   // If not paused, (re)set up the interval
-  //   if (intervalRef.current) {
-  //     intervalRef.current.clear()
-  //   }
-
-  //   intervalRef.current = createClearableInterval(() => {
-  //     const count = Math.min(defaultConfig.blocks.regenerateCount, blockCount)
-  //     setBlocksToRegenerate((current) => regenerateBlocks(current, count, blockCount))
-  //   }, defaultConfig.regenerateInterval)
-
-  //   return () => {
-  //     if (intervalRef.current) {
-  //       intervalRef.current.clear()
-  //       intervalRef.current = null
-  //     }
-  //   }
-  // }, [isPaused, blockCount])
-
-  const renderBlock = (i: number) => {
-    const style = blockStyles[i]
-    const styleObj = {
-      backgroundColor: style.bg,
-      top: style.top,
-      left: style.left,
-      zIndex: style.zIndex,
-      width: `${style.width}vw`,
-      fontFamily: token(`fonts.${style.fontFamily}` as Token),
-      // filter: `blur(${style.scale < 1 ? Math.floor((1 - style.scale) * 5) : 0}px)`,
-      transform: `scale(${1}) rotateX(${style.rotateX}deg) rotateY(${style.rotateY}deg) rotateZ(${style.rotateZ}deg)`,
-    }
-
-    return (
-      <LLMBlock
-        key={i}
-        index={i}
-        shouldRegenerate={blocksToRegenerate.has(i)}
-        isPaused={isPaused}
-        onRegenerationStart={() => onBlockRegenerationStart(i)}
-        content={JSON.stringify(defaultIntro)}
-        style={styleObj}
-      />
-    )
+  // Check if user is at bottom of scroll container
+  const isAtBottom = () => {
+    if (!scrollContainerRef.current) return false
+    const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current
+    return scrollTop + clientHeight >= scrollHeight - 50 // 10px threshold
   }
 
-  const videos = [
-    '/video/Black and White Esoteric Grid Patterns Video.mp4',
-    '/video/Black and White Grid Video.mp4',
-    '/video/Black Background Animation May 22.mp4',
-    '/video/color.mp4',
-    '/video/Dithered Black May 22 1556.mp4',
-    '/video/Dithered Black May 22 1556 (2).mp4',
-    '/video/Dithered Black May 22 1556 (3).mp4',
-    '/video/Dithered Black May 22 1556.mp4',
-    '/video/Dithered Black May 22.mp4',
-  ]
+  // Auto-scroll to bottom when completion changes, but only if user hasn't scrolled up
+  useEffect(() => {
+    if (scrollContainerRef.current && !isUserScrolling) {
+      const scrollContainer = scrollContainerRef.current
+      scrollContainer.scrollTop = scrollContainer.scrollHeight
+    }
+  }, [completion, currentCompletionRef.current, isUserScrolling])
+
+  // Handle scroll events to detect manual scrolling
+  useEffect(() => {
+    const scrollContainer = scrollContainerRef.current
+    if (!scrollContainer) return
+
+    const handleScroll = () => {
+      const atBottom = isAtBottom()
+      console.log('atBottom', atBottom)
+      setIsUserScrolling(!atBottom)
+    }
+
+    scrollContainer.addEventListener('scroll', handleScroll)
+    return () => scrollContainer.removeEventListener('scroll', handleScroll)
+  }, [])
+
+  // Function to scroll to bottom manually
+  const scrollToBottom = () => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight
+      setIsUserScrolling(false)
+    }
+  }
+
+  useEffect(() => {
+    scope.current = createScope({ root }).add((self) => {
+      const duration = 250
+
+      // createTimer({
+      //   duration,
+      //   loop: true,
+      //   onLoop: (self) => {
+      //     const x = utils.random(-1, 1) * 0
+      //     const y = utils.random(-1, 1) * 2
+      //     const z = utils.random(-1, 1) * 2
+
+      //     if (Math.random() < 0.3) {
+      //       return
+      //     }
+
+      //     animate('.plane', {
+      //       rotateX: { to: `${x}deg`, duration, ease: 'inOut(8)' },
+      //       rotateY: { to: `${y}deg`, duration, ease: 'inOut(8)' },
+      //       // rotateZ: { to: `${z}deg`, duration, ease: 'inOut(2)' },
+      //       translateZ: { to: `${z}px`, duration, ease: 'inOut(12)' },
+      //     })
+      //   },
+      // })
+      // const loop = createTimer({
+      //   onUpdate: clock => {
+      //     const sourceRotate = utils.get($input, 'rotate', false);
+      //     const lerpedRotate = utils.get($lerped, 'rotate', false);
+      //     utils.set($lerped, {
+      //       rotate: utils.lerp(lerpedRotate, sourceRotate, .075) + 'turn'
+      //     });
+      //   }
+      // });
+
+      // utils.set('.plane', {
+      // '--tl': '0 0',
+      // '--tr': '100% 0',
+      // '--br': '100% 100%',
+      // '--bl': '0 100%',
+      // clipPath: 'polygon(var(--tl), var(--tr), var(--br), var(--bl))',
+      // transform: 'rotate3d(1, 1, 1, 0deg)',
+      // })
+
+      // animate('.plane', {
+      //   '--tl': '-40% 10%',
+      //   '--tr': '100% 0',
+      //   '--br': '100% 100%',
+      //   '--bl': '0 90%',
+      //   // transform: 'rotate3d(1, 1, 1, 10deg)',
+      //   alternate: true,
+      //   loop: true,
+      //   loopDelay: 250,
+      // })
+    })
+
+    // Properly cleanup all anime.js instances declared inside the scope
+    return () => scope.current?.revert()
+  }, [])
 
   return (
-    <Box h="100dvh" position="relative" display="flex" flexDirection="column" bg="white">
+    <Box h="100dvh" position="relative" display="flex" flexDirection="column" bg="black">
       <Grid gridTemplateColumns="1fr 1fr" position="relative" flex="1" overflow="hidden" gap={0}>
-        <Center position="relative" zIndex="2">
+        <Center
+          ref={root}
+          position="relative"
+          zIndex="2"
+          perspective="1000px"
+          justifyContent="flex-end"
+          // alignItems="flex-end"
+          h="100dvh"
+          overflow="hidden"
+          bg="black"
+          p="48px"
+        >
           <Center
+            position="relative"
             w="full"
-            maxWidth="440px"
-            maxHeight="100vh"
-            justifyContent="flex-end"
+            h="full"
+            border="1px solid white"
             overflow="hidden"
+            bg="white/8"
+            // pr="16px"
+            pl="12px"
+            // alignItems="flex-end"
           >
-            <LLMUI pause={isPaused} />
-          </Center>
-        </Center>
+            <Flex
+              right="0"
+              position="absolute"
+              w="20px"
+              h="full"
+              flexDirection="column"
+              color="white"
+              bg="black"
+              borderLeft="1px solid white"
+            >
+              <Center>⋀</Center>
+              <Box flex="1">
+                <Box h="20px" w="20px" bg="white" />
+              </Box>
+              <Center>⋁</Center>
 
-        <Video
-          // src="/video/Black and White Grid Video.mp4"
-          src={videos[8]}
-          autoPlay
-          loop
-          muted
-          preload="auto"
-          playsInline
-          position="absolute"
-          top="0"
-          left="0"
-          w="100vw"
-          h="100vh"
-          objectFit="cover"
-          objectPosition="center"
-          filter="contrast(1.2)"
-          transformOrigin="left"
-          pointerEvents="none"
-        />
+              {/* <styled.pre lineHeight="1.1" fontSize="lg" color="white/90">
+                {Array.from({ length: 120 }, (_, i) => (
+                  <Box key={i}>#</Box>
+                  // <Box key={i}>≪</Box>
+                ))}
+              </styled.pre> */}
+            </Flex>
+
+            <Center
+              ref={scrollContainerRef}
+              className="plane"
+              w="full"
+              height="full"
+              display="flex"
+              flexDirection="column"
+              justifyContent="flex-start"
+              alignItems="stretch"
+              overflowY="scroll"
+              overflowX="hidden"
+              textAlign="right"
+              pr="28px"
+              css={{
+                '&::-webkit-scrollbar': {
+                  display: 'none',
+                },
+                scrollbarWidth: 'none',
+              }}
+            >
+              <Box flex="1" />
+              <Box
+                className="llmtxt"
+                position="relative"
+                zIndex="1"
+                color="white"
+                w="full"
+                // maxWidth="440px"
+                transformOrigin="right"
+                minHeight="fit-content"
+                pb="2"
+              >
+                <Markdown regenerateKey={regenKeyRef.current}>
+                  {isLoading
+                    ? currentCompletionRef.current + completion
+                    : currentCompletionRef.current}
+                </Markdown>
+              </Box>
+            </Center>
+          </Center>
+
+          <Box
+            position="absolute"
+            left="48px"
+            right="48px"
+            bottom="24px"
+            display="flex"
+            alignItems="flex-end"
+            color="black"
+            bg="white"
+            h="21px"
+            overflow="hidden"
+            border="1px solid white"
+            // filter="url(#dustFilter)"
+            // transform="scaleY(0.3) scaleX(0.3)"
+            transformOrigin="left bottom"
+            textAlign="left"
+            opacity={1}
+            zIndex="2"
+          >
+            {/* <Markdown regenerateKey={regenKeyRef.current}> */}
+            {/* {completion.replaceAll('\n', '===')} */}
+            {/* </Markdown> */}
+          </Box>
+        </Center>
 
         <Box
           position="relative"
           zIndex="2"
-          bg="#b8b8b8"
-          mixBlendMode="difference"
-          backdropFilter="blur(10px)"
+          bg="black"
+          // mixBlendMode="difference"
+          // backdropFilter="blur(10px)"
         >
-          <FeatureBlock ref={containerRef} isPaused={isPaused} />
+          <Box
+            pos="absolute"
+            right="70px"
+            bottom="-100px"
+            w="200px"
+            aspectRatio="212/592"
+            mixBlendMode="plus-lighter"
+          >
+            <Image
+              src="/images/candle.gif"
+              alt="candle"
+              fill
+              style={{
+                objectFit: 'contain',
+              }}
+            />
+          </Box>
+
+          <FeatureBlock isPaused={pause} />
         </Box>
 
-        <Box pos="fixed" bottom="0" left="0" zIndex="99999">
-          <styled.button
-            bg="black"
-            color="white"
-            py="1"
-            px="2"
-            onClick={() => setIsPaused(!isPaused)}
-          >
-            {isPaused ? 'resume' : 'pause'}
+        <Box pos="fixed" top="0" left="0" zIndex="99999">
+          <styled.button bg="black" color="white" py="1" px="2" onClick={() => setPause(!pause)}>
+            {pause ? 'resume' : 'pause'}
           </styled.button>
         </Box>
+
+        <svg
+          viewBox="0 0 250 250"
+          xmlns="http://www.w3.org/2000/svg"
+          style={{
+            position: 'absolute',
+            inset: '0',
+            visibility: 'hidden',
+          }}
+        >
+          <filter
+            id="dustFilter"
+            colorInterpolationFilters="linearRGB"
+            filterUnits="objectBoundingBox"
+            primitiveUnits="userSpaceOnUse"
+          >
+            <feTurbulence
+              type="turbulence"
+              baseFrequency="0.8 0.8"
+              numOctaves="4"
+              seed="4"
+              stitchTiles="stitch"
+              result="turbulence"
+            />
+            <feColorMatrix type="matrix" values={dustMatrix} in="turbulence" result="colormatrix" />
+            <feComposite in="colormatrix" in2="SourceAlpha" operator="in" result="composite" />
+            {/* <feTurbulence
+              type="turbulence"
+              baseFrequency="0.1 0.1"
+              numOctaves="1"
+              seed="2"
+              stitchTiles="stitch"
+              result="turbulence1"
+            /> */}
+            <feDisplacementMap
+              in="composite"
+              in2="turbulence1"
+              scale="20"
+              xChannelSelector="R"
+              yChannelSelector="B"
+              result="displacementMap"
+            />
+          </filter>
+        </svg>
       </Grid>
     </Box>
   )

@@ -5,14 +5,7 @@ import { createTogetherAI } from '@ai-sdk/togetherai'
 import { smoothStream, streamText } from 'ai'
 
 const models = [
-  // 'Qwen/Qwen2.5-7B-Instruct-Turbo',
-  'meta-llama/Meta-Llama-3-8B-Instruct-Lite',
-  'meta-llama/Llama-3.2-3B-Instruct-Turbo',
-  'meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8',
-  'meta-llama/Llama-4-Scout-17B-16E-Instruct',
   'meta-llama/Llama-3.3-70B-Instruct-Turbo',
-  // 'mistralai/Mistral-7B-Instruct-v0.2',
-  // 'Qwen/Qwen2.5-Coder-32B-Instruct',
   'meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo',
 ]
 
@@ -32,6 +25,7 @@ export async function POST(req: Request) {
   } = await req.json()
 
   const model = openai('gpt-4.1')
+  // const model = togetherai(models[0])
 
   console.log(model.modelId)
 
@@ -40,10 +34,12 @@ export async function POST(req: Request) {
     system: systemPrompt,
     prompt,
     maxTokens: maxTokens ?? 600,
-    temperature: 0.9,
+    temperature: 0.3,
+    presencePenalty: 1,
+    frequencyPenalty: 1,
     // experimental_transform: smoothStream({
-    //   delayInMs: 10,
-    //   chunking: 'line',
+    //   delayInMs: 200,
+    // chunking: 'line',
     // }),
     onError({ error }) {
       console.error(error)

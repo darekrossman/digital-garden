@@ -120,14 +120,14 @@ export function AsteroidVideo(props: HTMLStyledProps<'video'>) {
         animate={{ opacity: 1 }}
       >
         <Center id="genbox" position="relative" zIndex="1" w="100vw" h="100vh">
-          {/* <HStack gap="8" h="full" alignItems="center" justifyItems="center">
+          <HStack gap="8" h="full" alignItems="center" justifyItems="center">
             <Box w="460px">
               <LLMCanvas pause={pause} align="right" />
             </Box>
             <Box w="460px">
               <LLMCanvas pause={pause} align="left" />
             </Box>
-          </HStack> */}
+          </HStack>
         </Center>
 
         <MotionCenter zIndex="2" style={{ filter: 'contrast(1.2)' }} pointerEvents="none">

@@ -2,8 +2,10 @@
 
 import { defaultIntro } from '@/lib/constants'
 import { createClearableInterval } from '@/lib/helpers'
+import { css } from '@/styled-system/css'
 import { Box, Center, Flex, Grid, Stack, styled } from '@/styled-system/jsx'
 import { motion } from 'motion/react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { startTransition, useEffect, useRef, useState } from 'react'
 import Scrambler from './scrambler'
@@ -59,9 +61,8 @@ export function FeatureBlock({
             fontFamily="pixel"
             fontSize="18px"
             lineHeight="0.8"
-            // letterSpacing="-12px"
             ml="-2px"
-            color="gray.950"
+            color="white"
             textBoxEdge="cap alphabetic"
             textBoxTrim="trim-both"
           >
@@ -81,26 +82,33 @@ export function FeatureBlock({
               <Scrambler>.</Scrambler>
             </styled.p>
           ))}
+
+          <Box aria-hidden />
+
+          <Link
+            href="/me"
+            className={css({
+              display: 'flex',
+              w: 'max-content',
+              px: '3',
+              py: '1',
+              fontFamily: 'pixel',
+              fontSize: '16px',
+              color: 'black',
+              bg: 'white/15',
+              border: 'outset 4px black',
+              _hover: {
+                bg: 'white/1',
+              },
+              _active: {
+                border: 'inset 4px black',
+              },
+            })}
+          >
+            move forward
+          </Link>
         </Stack>
       </Flex>
-
-      <Center
-        pos="absolute"
-        color="gray.950"
-        fontFamily="pixel"
-        fontSize="16px"
-        style={{
-          left: cellWidth * 4,
-          bottom: cellWidth * 4,
-        }}
-        _hover={{
-          color: 'white',
-        }}
-      >
-        <styled.p textBoxEdge="cap alphabetic" textBoxTrim="trim-both">
-          <Link href="/me">move forward</Link>
-        </styled.p>
-      </Center>
     </Box>
   )
 }

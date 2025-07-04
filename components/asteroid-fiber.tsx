@@ -115,18 +115,9 @@ function Scene(props: AsteroidProps & { size?: number }) {
 
       {/* <fog color="#161616" attach="fog" near={8} far={30} args={[0, 0, 0]} /> */}
 
-      <EffectComposer multisampling={8}>
-        <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
-        <SelectiveBloom
-          luminanceThreshold={0.1}
-          luminanceSmoothing={0.025}
-          intensity={0.9}
-          mipmapBlur={true}
-          levels={6}
-          radius={1}
-          lights={[lightRef as any, ambientLightRef as any]}
-          selection={[rockRef as any]}
-        />
+      <EffectComposer>
+        {/* <ToneMapping mode={ToneMappingMode.ACES_FILMIC} /> */}
+        {/* <Bloom /> */}
         <Noise opacity={0.1} />
       </EffectComposer>
     </>

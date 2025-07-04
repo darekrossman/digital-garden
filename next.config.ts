@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
   },
   reactStrictMode: false,
   transpilePackages: ['three'],
+  devIndicators: false,
 }
 
 export default nextConfig
