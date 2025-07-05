@@ -141,10 +141,11 @@ export function Markdown({ regenerateKey = 1, children }: MarkdownProps) {
         // Blockquote spacing
         '& blockquote': {
           marginTop: '1em',
-          marginBottom: '2em',
+          marginBottom: '1em',
           paddingLeft: '1em',
-          borderLeft: '2px solid currentColor',
-          opacity: 0.8,
+          borderLeft: '3px solid {colors.white/50}',
+          color: 'white/70',
+          fontStyle: 'italic',
         },
         // Code spacing
         '& pre': {

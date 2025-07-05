@@ -25,7 +25,13 @@ export function FloatingImage({ prompt }: { prompt: string }) {
       }}
     >
       <ViewTransition name="fblock" enter="glitch-in" exit="glitch-out">
-        <ImageFrame prompt={prompt} />
+        <ImageFrame
+          prompt={prompt}
+          glitchEnabled={true}
+          glitchIntensity={0.4}
+          glitchFrequency={0.15}
+          glitchDuration={180}
+        />
       </ViewTransition>
     </Box>
   )

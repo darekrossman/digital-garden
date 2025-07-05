@@ -1,4 +1,4 @@
-import { GenerativeBg } from '@/components/generative-bg'
+import { RPGGame } from '@/components/rpg-game'
 import { Box } from '@/styled-system/jsx'
 import { unstable_ViewTransition as ViewTransition } from 'react'
 
@@ -9,7 +9,7 @@ export default function Home() {
   return (
     <ViewTransition enter="glitch-in" exit="glitch-out">
       <Box>
-        <GenerativeBg />
+        <RPGGame />
       </Box>
     </ViewTransition>
   )

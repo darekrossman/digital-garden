@@ -5,6 +5,7 @@ import { Box, Flex, HStack, Stack, styled } from '@/styled-system/jsx'
 import { experimental_useObject as useObject } from '@ai-sdk/react'
 import { useEffect, useMemo, useState } from 'react'
 import { z } from 'zod'
+import { AudioStreamer } from './inference/audio-stream'
 import { Markdown } from './llm-ui-markdown'
 
 export type RPGObject = z.infer<typeof rpgSchema>
@@ -27,8 +28,10 @@ export const RPGChat = ({
   onLoadingChange?: (isLoading: boolean) => void
 }) => {
   const [messages, setMessages] = useState<RPGMessage[]>([
-    { id: 0, role: 'user', content: "Let's begin the adventure!" },
+    { id: 0, role: 'user', content: `Begin the story. ${Math.random() * 10000000000}` },
   ])
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false)
+  const [audioStreamer] = useState(() => new AudioStreamer())
 
   const { object, submit, isLoading } = useObject({
     api: '/api/rpgchat',
@@ -61,7 +64,26 @@ export const RPGChat = ({
     if (object?.sceneDescription && object?.story && isLoading) {
       onSceneDescription?.(object.sceneDescription)
     }
-  }, [object?.sceneDescription, object?.story, isLoading])
+
+    if (object?.story && object?.choices && isLoading) {
+      if (!isPlayingAudio) {
+        setIsPlayingAudio(true)
+        audioStreamer.play({
+          text: object.story,
+          voice: 'fable',
+          onStart: () => console.log('Audio started'),
+          onEnd: () => {
+            console.log('Audio ended')
+            setIsPlayingAudio(false)
+          },
+          onError: (error) => {
+            console.error('Audio error:', error)
+            setIsPlayingAudio(false)
+          },
+        })
+      }
+    }
+  }, [object?.sceneDescription, object?.story, object?.choices, isLoading])
 
   useEffect(() => {
     onLoadingChange?.(isLoading)
@@ -73,8 +95,22 @@ export const RPGChat = ({
     }
   }, [])
 
+  // Cleanup audio when component unmounts
+  useEffect(() => {
+    return () => {
+      audioStreamer.stop()
+    }
+  }, [])
+
   const handleSubmit = (selectedChoice?: string) => {
     if (!selectedChoice) return
+
+    // Stop any currently playing audio when user makes a choice
+    if (isPlayingAudio) {
+      audioStreamer.stop()
+      setIsPlayingAudio(false)
+    }
+
     const msg: RPGMessage = { role: 'user', content: selectedChoice }
     const newMessages = [...messages, msg]
     setMessages(newMessages)
@@ -82,8 +118,8 @@ export const RPGChat = ({
   }
 
   return (
-    <Box color="white/90" px="2">
-      <Stack gap="8">
+    <Box color="white/90" px="2" minH="full" display="flex" flexDirection="column">
+      <Stack gap="8" flex="1">
         {lastUserMessage && (
           <HStack gap="3" color="white/50" alignItems="flex-start">
             <styled.p fontSize="18px" lineHeight="0" mt="10px">
@@ -129,6 +165,26 @@ export const RPGChat = ({
         )}
         <Box h="10" />
       </Stack>
+
+      <styled.input
+        type="text"
+        p="4"
+        bg="black"
+        color="white"
+        border="1px solid {colors.white}"
+        placeholder="Type your own response..."
+        _focus={{
+          outline: 'none',
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            handleSubmit(e.currentTarget.value)
+            e.currentTarget.value = ''
+          }
+        }}
+      />
     </Box>
   )
 }
+
+// This function is no longer needed as we use the AudioStreamer instance directly

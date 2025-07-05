@@ -77,6 +77,15 @@ export function ImageFrame({ prompt }: ImageFrameProps) {
 
   const fadeTimer = useRef<NodeJS.Timeout | null>(null)
   const fadeTick = useRef(1)
+  const pixelSize = useRef(48)
+
+  const minPixelSize = 8
+
+  const clearFadeInterval = () => {
+    if (fadeTimer.current) {
+      clearInterval(fadeTimer.current)
+    }
+  }
 
   const process = (pixelSize: number) => {
     const canvas = outputCanvasRef.current!
@@ -87,40 +96,38 @@ export function ImageFrame({ prompt }: ImageFrameProps) {
   }
 
   const runStream = async (prompt: string) => {
+    console.time('runStream')
     const { output } = await generateImage(prompt)
-
-    renderCountRef.current = 1
+    console.timeEnd('runStream')
 
     const canvas = outputCanvasRef.current!
     const context = canvasContextRef.current!
-
     const img = new Image()
 
-    for await (const value of readStreamableValue(output)) {
-      if (value && typeof value === 'string') {
-        img.src = value
-        img.onload = () => {
-          if (fadeTimer.current) {
-            clearInterval(fadeTimer.current)
-          }
+    img.src = output
+    img.onload = () => {
+      clearFadeInterval()
 
-          renderCountRef.current++
+      outputCanvasRef.current!.style.opacity = '0.2'
 
-          outputCanvasRef.current!.style.opacity = `${0.5 + (0.5 * renderCountRef.current) / 10}`
-
-          context.clearRect(0, 0, canvas.width, canvas.height)
-          context.drawImage(img, 0, 0, canvas.width, canvas.height)
-
-          process(Math.floor(56 / renderCountRef.current))
-        }
-      }
-    }
-
-    setTimeout(() => {
-      outputCanvasRef.current!.style.opacity = '1'
+      context.clearRect(0, 0, canvas.width, canvas.height)
       context.drawImage(img, 0, 0, canvas.width, canvas.height)
-      process(6)
-    }, 500)
+
+      pixelSize.current = 96
+      process(pixelSize.current)
+
+      fadeTimer.current = setInterval(() => {
+        context.drawImage(img, 0, 0, canvas.width, canvas.height)
+        pixelSize.current = Math.max(minPixelSize, Math.floor(pixelSize.current / 2))
+        process(pixelSize.current)
+        outputCanvasRef.current!.style.opacity = `${parseFloat(outputCanvasRef.current!.style.opacity) + 0.2}`
+
+        if (pixelSize.current <= minPixelSize) {
+          outputCanvasRef.current!.style.opacity = '1'
+          clearFadeInterval()
+        }
+      }, 150)
+    }
   }
 
   useEffect(() => {
@@ -130,17 +137,15 @@ export function ImageFrame({ prompt }: ImageFrameProps) {
 
   useEffect(() => {
     if (!prompt) {
-      if (fadeTimer.current) {
-        clearInterval(fadeTimer.current)
-      }
+      clearFadeInterval()
 
       fadeTick.current = 1
 
       fadeTimer.current = setInterval(() => {
-        process(2 * fadeTick.current)
+        process(minPixelSize + 2 * fadeTick.current)
         outputCanvasRef.current!.style.opacity = `${1 - fadeTick.current / 10}`
         fadeTick.current++
-      }, 200)
+      }, 150)
 
       return
     }

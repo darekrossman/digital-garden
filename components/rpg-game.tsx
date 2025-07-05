@@ -3,38 +3,21 @@
 import { hexToColorMatrix } from '@/lib/helpers'
 import { Box, Center, Flex, Grid, HStack, Stack, styled } from '@/styled-system/jsx'
 import { token } from '@/styled-system/tokens'
-import {
-  Scope,
-  animate,
-  createAnimatable,
-  createDraggable,
-  createScope,
-  createSpring,
-  createTimer,
-  utils,
-} from 'animejs'
+
 import { motion } from 'motion/react'
-import Image from 'next/image'
 import { useEffect, useState } from 'react'
 import { useRef } from 'react'
-import { FeatureBlock } from './feature-block'
 import { ImageFrame } from './image-frame'
-import { useLLMText } from './llm-ui'
-import { Markdown } from './llm-ui-markdown'
 import { RPGChat } from './rpg-chat'
 
-export function GenerativeBg() {
+export function RPGGame() {
   const [pause, setPause] = useState(false)
   const [isUserScrolling, setIsUserScrolling] = useState(false)
-  // const { currentCompletionRef, completion, regenKeyRef, onResponse, isLoading } = useLLMText({
-  //   pause: true,
-  // })
 
   const [isLoading, setIsLoading] = useState(false)
   const [sceneDescription, setSceneDescription] = useState<string | null>(null)
   const [foundObject, setFoundObject] = useState<string | null>(null)
 
-  const scope = useRef<Scope>(null)
   const root = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const scrollNibRef = useRef<HTMLDivElement>(null)
@@ -99,63 +82,47 @@ export function GenerativeBg() {
   }, [isLoading])
 
   useEffect(() => {
-    scope.current = createScope({ root }).add((self) => {
-      const duration = 250
+    root.current!.style.opacity = '1'
+    glitch(3)
 
-      // createTimer({
-      //   duration,
-      //   loop: true,
-      //   onLoop: (self) => {
-      //     const x = utils.random(-1, 1) * 0
-      //     const y = utils.random(-1, 1) * 2
-      //     const z = utils.random(-1, 1) * 2
+    const interval = setInterval(() => {
+      if (Math.random() < 0.1) {
+        glitch(2)
+      }
+    }, 10000)
 
-      //     if (Math.random() < 0.3) {
-      //       return
-      //     }
-
-      //     animate('.plane', {
-      //       rotateX: { to: `${x}deg`, duration, ease: 'inOut(8)' },
-      //       rotateY: { to: `${y}deg`, duration, ease: 'inOut(8)' },
-      //       // rotateZ: { to: `${z}deg`, duration, ease: 'inOut(2)' },
-      //       translateZ: { to: `${z}px`, duration, ease: 'inOut(12)' },
-      //     })
-      //   },
-      // })
-      // const loop = createTimer({
-      //   onUpdate: clock => {
-      //     const sourceRotate = utils.get($input, 'rotate', false);
-      //     const lerpedRotate = utils.get($lerped, 'rotate', false);
-      //     utils.set($lerped, {
-      //       rotate: utils.lerp(lerpedRotate, sourceRotate, .075) + 'turn'
-      //     });
-      //   }
-      // });
-
-      // utils.set('.plane', {
-      // '--tl': '0 0',
-      // '--tr': '100% 0',
-      // '--br': '100% 100%',
-      // '--bl': '0 100%',
-      // clipPath: 'polygon(var(--tl), var(--tr), var(--br), var(--bl))',
-      // transform: 'rotate3d(1, 1, 1, 0deg)',
-      // })
-
-      // animate('.plane', {
-      //   '--tl': '-40% 10%',
-      //   '--tr': '100% 0',
-      //   '--br': '100% 100%',
-      //   '--bl': '0 90%',
-      //   // transform: 'rotate3d(1, 1, 1, 10deg)',
-      //   alternate: true,
-      //   loop: true,
-      //   loopDelay: 250,
-      // })
-    })
-
-    // Properly cleanup all anime.js instances declared inside the scope
-    return () => scope.current?.revert()
+    return () => clearInterval(interval)
   }, [])
+
+  const glitch = (count = 1) => {
+    if (count <= 0) return
+
+    const el = root.current!
+
+    if (Math.random() < 0.77) {
+      el.style.filter = 'blur(2px) brightness(0.5)'
+      el.style.transform = 'translateY(1px) skew(1deg) scale(0.98)'
+    } else {
+      el.style.filter = 'brightness(0.5)'
+      el.style.transform = 'translateX(1px) skew(-1deg)'
+    }
+
+    setTimeout(
+      () => {
+        el.style.filter = ''
+        el.style.transform = ''
+        setTimeout(
+          () => {
+            if (count > 0) {
+              glitch(count - 1)
+            }
+          },
+          Math.floor(Math.random() * 50) + 50,
+        )
+      },
+      Math.floor(Math.random() * 50) + 50,
+    )
+  }
 
   return (
     <Flex
@@ -167,6 +134,7 @@ export function GenerativeBg() {
       bg="black"
     >
       <Grid
+        ref={root}
         gridTemplateColumns="1fr 1fr"
         position="relative"
         flex="1"
@@ -177,9 +145,9 @@ export function GenerativeBg() {
         w="full"
         maxW="1200px"
         maxH="1024px"
+        opacity="0"
       >
         <Center
-          ref={root}
           position="relative"
           zIndex="2"
           perspective="1000px"
