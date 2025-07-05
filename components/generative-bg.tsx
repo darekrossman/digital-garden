@@ -1,7 +1,7 @@
 'use client'
 
 import { hexToColorMatrix } from '@/lib/helpers'
-import { Box, Center, Flex, Grid, styled } from '@/styled-system/jsx'
+import { Box, Center, Flex, Grid, HStack, Stack, styled } from '@/styled-system/jsx'
 import { token } from '@/styled-system/tokens'
 import {
   Scope,
@@ -17,26 +17,31 @@ import { motion } from 'motion/react'
 import Image from 'next/image'
 import { useEffect, useState } from 'react'
 import { useRef } from 'react'
-import { unstable_ViewTransition as ViewTransition } from 'react'
 import { FeatureBlock } from './feature-block'
+import { ImageFrame } from './image-frame'
 import { useLLMText } from './llm-ui'
 import { Markdown } from './llm-ui-markdown'
+import { RPGChat } from './rpg-chat'
 
 export function GenerativeBg() {
   const [pause, setPause] = useState(false)
   const [isUserScrolling, setIsUserScrolling] = useState(false)
-  const { currentCompletionRef, completion, regenKeyRef, onResponse, isLoading } = useLLMText({
-    pause: true,
-  })
+  // const { currentCompletionRef, completion, regenKeyRef, onResponse, isLoading } = useLLMText({
+  //   pause: true,
+  // })
+
+  const [isLoading, setIsLoading] = useState(false)
+  const [sceneDescription, setSceneDescription] = useState<string | null>(null)
+  const [foundObject, setFoundObject] = useState<string | null>(null)
 
   const scope = useRef<Scope>(null)
   const root = useRef<HTMLDivElement>(null)
-  const planeRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const scrollNibRef = useRef<HTMLDivElement>(null)
 
-  // Generate color matrix for the dust effect
   const rootColor = token('colors.neutral.500')
   const dustMatrix = hexToColorMatrix(rootColor, '0 0 0 -40 10')
+  const scrollbarWidth = 16
 
   // Check if user is at bottom of scroll container
   const isAtBottom = () => {
@@ -46,23 +51,34 @@ export function GenerativeBg() {
   }
 
   // Auto-scroll to bottom when completion changes, but only if user hasn't scrolled up
-  useEffect(() => {
-    if (scrollContainerRef.current && !isUserScrolling) {
-      const scrollContainer = scrollContainerRef.current
-      scrollContainer.scrollTop = scrollContainer.scrollHeight
-    }
-  }, [completion, currentCompletionRef.current, isUserScrolling])
+  // useEffect(() => {
+  //   if (scrollContainerRef.current && !isUserScrolling) {
+  //     const scrollContainer = scrollContainerRef.current
+  //     scrollContainer.scrollTop = scrollContainer.scrollHeight
+  //   }
+  // }, [completion, currentCompletionRef.current, isUserScrolling])
 
   // Handle scroll events to detect manual scrolling
   useEffect(() => {
     const scrollContainer = scrollContainerRef.current
-    if (!scrollContainer) return
+    const nib = scrollNibRef.current
+    if (!scrollContainer || !nib) return
 
     const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = scrollContainer
+
+      const y = scrollTop / (scrollHeight - clientHeight)
+
+      console.log(scrollTop, scrollHeight, clientHeight)
+
+      nib.style.transform = `translateY(${y * (clientHeight - scrollbarWidth)}px)`
+
       const atBottom = isAtBottom()
       console.log('atBottom', atBottom)
       setIsUserScrolling(!atBottom)
     }
+
+    // nib.style.transform = 'translateY(0)'
 
     scrollContainer.addEventListener('scroll', handleScroll)
     return () => scrollContainer.removeEventListener('scroll', handleScroll)
@@ -75,6 +91,12 @@ export function GenerativeBg() {
       setIsUserScrolling(false)
     }
   }
+
+  useEffect(() => {
+    if (isLoading) {
+      setSceneDescription(null)
+    }
+  }, [isLoading])
 
   useEffect(() => {
     scope.current = createScope({ root }).add((self) => {
@@ -136,19 +158,36 @@ export function GenerativeBg() {
   }, [])
 
   return (
-    <Box h="100dvh" position="relative" display="flex" flexDirection="column" bg="black">
-      <Grid gridTemplateColumns="1fr 1fr" position="relative" flex="1" overflow="hidden" gap={0}>
+    <Flex
+      h="100dvh"
+      position="relative"
+      justifyContent="center"
+      alignItems="center"
+      flexDirection="column"
+      bg="black"
+    >
+      <Grid
+        gridTemplateColumns="1fr 1fr"
+        position="relative"
+        flex="1"
+        gap="12"
+        p="12"
+        overflow="hidden"
+        h="full"
+        w="full"
+        maxW="1200px"
+        maxH="1024px"
+      >
         <Center
           ref={root}
           position="relative"
           zIndex="2"
           perspective="1000px"
           justifyContent="flex-end"
-          // alignItems="flex-end"
-          h="100dvh"
+          h="full"
           overflow="hidden"
           bg="black"
-          p="48px"
+          boxShadow="8px 8px 0px {colors.white/10}"
         >
           <Center
             position="relative"
@@ -156,33 +195,31 @@ export function GenerativeBg() {
             h="full"
             border="1px solid white"
             overflow="hidden"
-            bg="white/8"
-            // pr="16px"
-            pl="12px"
-            // alignItems="flex-end"
+            bg="white/5"
           >
             <Flex
-              right="0"
               position="absolute"
-              w="20px"
               h="full"
+              right="0"
               flexDirection="column"
               color="white"
-              bg="black"
               borderLeft="1px solid white"
+              style={{ width: scrollbarWidth }}
             >
-              <Center>⋀</Center>
-              <Box flex="1">
-                <Box h="20px" w="20px" bg="white" />
-              </Box>
-              <Center>⋁</Center>
-
-              {/* <styled.pre lineHeight="1.1" fontSize="lg" color="white/90">
-                {Array.from({ length: 120 }, (_, i) => (
-                  <Box key={i}>#</Box>
-                  // <Box key={i}>≪</Box>
-                ))}
-              </styled.pre> */}
+              <Box
+                position="absolute"
+                opacity="0.4"
+                w="full"
+                h="full"
+                backgroundImage="url(/images/dot.png)"
+                backgroundRepeat="repeat"
+                backgroundSize="3px 3px"
+              />
+              <Box
+                ref={scrollNibRef}
+                bg="white"
+                style={{ height: scrollbarWidth, width: scrollbarWidth }}
+              />
             </Flex>
 
             <Center
@@ -196,8 +233,6 @@ export function GenerativeBg() {
               alignItems="stretch"
               overflowY="scroll"
               overflowX="hidden"
-              textAlign="right"
-              pr="28px"
               css={{
                 '&::-webkit-scrollbar': {
                   display: 'none',
@@ -205,85 +240,140 @@ export function GenerativeBg() {
                 scrollbarWidth: 'none',
               }}
             >
-              <Box flex="1" />
               <Box
                 className="llmtxt"
                 position="relative"
                 zIndex="1"
-                color="white"
                 w="full"
-                // maxWidth="440px"
-                transformOrigin="right"
-                minHeight="fit-content"
-                pb="2"
+                h="full"
+                p="8"
+                pr="42px"
               >
-                <Markdown regenerateKey={regenKeyRef.current}>
-                  {isLoading
-                    ? currentCompletionRef.current + completion
-                    : currentCompletionRef.current}
-                </Markdown>
+                <RPGChat
+                  onSceneDescription={setSceneDescription}
+                  onFoundObject={setFoundObject}
+                  onLoadingChange={setIsLoading}
+                />
               </Box>
             </Center>
           </Center>
-
-          <Box
-            position="absolute"
-            left="48px"
-            right="48px"
-            bottom="24px"
-            display="flex"
-            alignItems="flex-end"
-            color="black"
-            bg="white"
-            h="21px"
-            overflow="hidden"
-            border="1px solid white"
-            // filter="url(#dustFilter)"
-            // transform="scaleY(0.3) scaleX(0.3)"
-            transformOrigin="left bottom"
-            textAlign="left"
-            opacity={1}
-            zIndex="2"
-          >
-            {/* <Markdown regenerateKey={regenKeyRef.current}> */}
-            {/* {completion.replaceAll('\n', '===')} */}
-            {/* </Markdown> */}
-          </Box>
         </Center>
 
-        <Box
-          position="relative"
-          zIndex="2"
-          bg="black"
-          // mixBlendMode="difference"
-          // backdropFilter="blur(10px)"
-        >
+        <Flex position="relative" flexDirection="column" gap="12">
           <Box
-            pos="absolute"
-            right="70px"
-            bottom="-100px"
-            w="200px"
-            aspectRatio="212/592"
-            mixBlendMode="plus-lighter"
+            w="full"
+            border="1px solid white"
+            boxShadow="8px 8px 0px {colors.white/10}"
+            position="relative"
           >
-            <Image
-              src="/images/candle.gif"
-              alt="candle"
-              fill
-              style={{
-                objectFit: 'contain',
-              }}
-            />
+            <Box w="full" aspectRatio="1/1">
+              <ImageFrame prompt={sceneDescription} />
+            </Box>
+
+            <Center h="140px" p="8" color="white" bg="black" w="full" borderTop="1px solid white">
+              <styled.div fontSize="14px" fontStyle="italic" w="full" lineClamp="4">
+                {sceneDescription || (
+                  <motion.div
+                    key={foundObject}
+                    animate={{
+                      color: ['#888888', '#ffffff', '#888888'],
+                    }}
+                    transition={{
+                      duration: 1.8,
+                      repeat: Infinity,
+                    }}
+                  >
+                    Loading...
+                  </motion.div>
+                )}
+              </styled.div>
+            </Center>
           </Box>
 
-          <FeatureBlock isPaused={pause} />
-        </Box>
+          <Stack
+            position="relative"
+            flex="1"
+            p="8"
+            border="1px solid white"
+            boxShadow="8px 8px 0px {colors.white/10}"
+            overflow="hidden"
+          >
+            {/* {foundObject && (
+              <HStack>
+                <motion.div
+                  key={foundObject}
+                  animate={{
+                    color: ['#000000', '#ffffff', '#000000'],
+                  }}
+                  transition={{
+                    duration: 1.8,
+                    repeat: Infinity,
+                    // ease: 'easeInOut',
+                  }}
+                  style={{
+                    fontSize: '24px',
+                    fontWeight: 'bold',
+                  }}
+                >
+                  ➩
+                </motion.div>
+                <Box color="white" fontSize="14px">
+                  You found a {foundObject}
+                </Box>
+              </HStack>
+            )} */}
 
-        <Box pos="fixed" top="0" left="0" zIndex="99999">
+            <Stack color="white">
+              <HStack fontSize="lg">
+                HP:
+                <HStack gap="0">
+                  {Array.from({ length: 20 }, (_, i) => (
+                    <Box key={i} color="white">
+                      ▓
+                    </Box>
+                  ))}
+                </HStack>
+              </HStack>
+              <HStack fontSize="lg">
+                MP:
+                <HStack gap="0">
+                  {Array.from({ length: 20 }, (_, i) => (
+                    <Box key={i} color="white">
+                      ▓
+                    </Box>
+                  ))}
+                </HStack>
+              </HStack>
+            </Stack>
+            {/* 
+            <Box
+              pos="absolute"
+              right="40px"
+              bottom="-120px"
+              w="120px"
+              aspectRatio="212/592"
+              mixBlendMode="plus-lighter"
+              zIndex="1"
+            >
+              <Image
+                src="/images/candle.gif"
+                alt="candle"
+                fill
+                style={{
+                  objectFit: 'contain',
+                }}
+              />
+            </Box> */}
+          </Stack>
+
+          {/* <FeatureBlock isPaused={pause} /> */}
+        </Flex>
+
+        {/* <Box pos="fixed" top="0" left="0" zIndex="99999">
           <styled.button bg="black" color="white" py="1" px="2" onClick={() => setPause(!pause)}>
             {pause ? 'resume' : 'pause'}
           </styled.button>
-        </Box>
+        </Box> */}
 
         <svg
           viewBox="0 0 250 250"
@@ -329,6 +419,6 @@ export function GenerativeBg() {
           </filter>
         </svg>
       </Grid>
-    </Box>
+    </Flex>
   )
 }

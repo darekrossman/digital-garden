@@ -1,129 +1,163 @@
 'use client'
 
-import { getRandomAdjective, getRandomSymbolicObject } from '@/lib/helpers'
 import { css } from '@/styled-system/css'
-import { Box, styled } from '@/styled-system/jsx'
-import { fal } from '@fal-ai/client'
-import { ChatCompletionMessageParam } from 'openai/src/resources.js'
+import { readStreamableValue } from 'ai/rsc'
 import { useEffect, useRef, useState } from 'react'
-import { generate } from './inference/image-gen'
+import { generateImage } from './inference/image-gen'
 
 interface ImageFrameProps {
-  prompt?: string
+  prompt?: string | null
   onComplete?: () => void
   regenerateKey?: number
+  pixelSize?: number
+  ditherStrength?: number
+  whiteLevel?: number
+  blackLevel?: number
+  grayLevel?: number
+  ditheringAlgorithm?: 'floyd-steinberg' | 'ordered'
 }
 
-fal.config({
-  credentials: process.env.NEXT_PUBLIC_FAL_KEY,
-})
+// Grayscale conversion function
+function convertToGrayscale(imageData: ImageData): ImageData {
+  const { data, width, height } = imageData
+  const newData = new Uint8ClampedArray(data.length)
 
-export function ImageFrame({ prompt, onComplete, regenerateKey }: ImageFrameProps) {
-  const [isGenerating, setIsGenerating] = useState(false)
-  const [imageDataUrl, setImageDataUrl] = useState<string | undefined>()
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i]
+    const g = data[i + 1]
+    const b = data[i + 2]
+    const a = data[i + 3]
 
-  const currentDrawing = useRef<Uint8Array | null>(null)
-  const outputCanvasRef = useRef<HTMLCanvasElement | null>(null)
+    // Use luminance formula for grayscale conversion
+    const gray = Math.round(0.299 * r + 0.587 * g + 0.114 * b)
 
-  const connection = fal.realtime.connect('fal-ai/fast-lcm-diffusion', {
-    throttleInterval: 500,
-    onResult(result) {
-      if (result.images && result.images[0] && result.images[0].content) {
-        const canvas = outputCanvasRef.current
-        const context = canvas?.getContext('2d')
-        if (canvas && context) {
-          const imageBytes: Uint8Array = result.images[0].content
-          const blob = new Blob([imageBytes], { type: 'image/png' })
-          createImageBitmap(blob)
-            .then((bitmap) => {
-              context.drawImage(bitmap, 0, 0)
-              console.timeEnd(`image generation ${regenerateKey}`)
-            })
-            .catch(console.error)
+    newData[i] = gray // R
+    newData[i + 1] = gray // G
+    newData[i + 2] = gray // B
+    newData[i + 3] = a // A (alpha)
+  }
+
+  return new ImageData(newData, width, height)
+}
+
+// Pixelation function
+function pixelate(imageData: ImageData, pixelSize: number): ImageData {
+  const { data, width, height } = imageData
+  const newData = new Uint8ClampedArray(data.length)
+
+  for (let y = 0; y < height; y += pixelSize) {
+    for (let x = 0; x < width; x += pixelSize) {
+      // Get the color of the top-left pixel of this block
+      const i = (y * width + x) * 4
+      const r = data[i]
+      const g = data[i + 1]
+      const b = data[i + 2]
+      const a = data[i + 3]
+
+      // Fill the entire block with this color
+      for (let dy = 0; dy < pixelSize && y + dy < height; dy++) {
+        for (let dx = 0; dx < pixelSize && x + dx < width; dx++) {
+          const targetI = ((y + dy) * width + (x + dx)) * 4
+          newData[targetI] = r
+          newData[targetI + 1] = g
+          newData[targetI + 2] = b
+          newData[targetI + 3] = a
         }
       }
-    },
-    onError: (error) => {
-      console.error(error)
-    },
-  })
+    }
+  }
+
+  return new ImageData(newData, width, height)
+}
+
+export function ImageFrame({ prompt }: ImageFrameProps) {
+  const outputCanvasRef = useRef<HTMLCanvasElement | null>(null)
+  const canvasContextRef = useRef<CanvasRenderingContext2D | null>(null)
+  const renderCountRef = useRef(1)
+
+  const fadeTimer = useRef<NodeJS.Timeout | null>(null)
+  const fadeTick = useRef(1)
+
+  const process = (pixelSize: number) => {
+    const canvas = outputCanvasRef.current!
+    const context = canvasContextRef.current!
+    const imageData = context.getImageData(0, 0, canvas.width, canvas.height)
+    const data = pixelate(convertToGrayscale(imageData), pixelSize)
+    context.putImageData(data, 0, 0)
+  }
+
+  const runStream = async (prompt: string) => {
+    const { output } = await generateImage(prompt)
+
+    renderCountRef.current = 1
+
+    const canvas = outputCanvasRef.current!
+    const context = canvasContextRef.current!
+
+    const img = new Image()
+
+    for await (const value of readStreamableValue(output)) {
+      if (value && typeof value === 'string') {
+        img.src = value
+        img.onload = () => {
+          if (fadeTimer.current) {
+            clearInterval(fadeTimer.current)
+          }
+
+          renderCountRef.current++
+
+          outputCanvasRef.current!.style.opacity = `${0.5 + (0.5 * renderCountRef.current) / 10}`
+
+          context.clearRect(0, 0, canvas.width, canvas.height)
+          context.drawImage(img, 0, 0, canvas.width, canvas.height)
+
+          process(Math.floor(56 / renderCountRef.current))
+        }
+      }
+    }
+
+    setTimeout(() => {
+      outputCanvasRef.current!.style.opacity = '1'
+      context.drawImage(img, 0, 0, canvas.width, canvas.height)
+      process(6)
+    }, 500)
+  }
 
   useEffect(() => {
-    if (Math.random() < 0.8) {
+    const context = outputCanvasRef.current?.getContext('2d', { willReadFrequently: true }) || null
+    canvasContextRef.current = context
+  }, [])
+
+  useEffect(() => {
+    if (!prompt) {
+      if (fadeTimer.current) {
+        clearInterval(fadeTimer.current)
+      }
+
+      fadeTick.current = 1
+
+      fadeTimer.current = setInterval(() => {
+        process(2 * fadeTick.current)
+        outputCanvasRef.current!.style.opacity = `${1 - fadeTick.current / 10}`
+        fadeTick.current++
+      }, 200)
+
       return
     }
 
-    const defaultPrompt = `lo-fi, esoteric, techno-code, ${getRandomAdjective()}, black ${getRandomSymbolicObject()} with transparent white background. image should be contained in the bounds of the frame and not be cropped, include stream of machine code, jagged interruptions, strange perspectives.`
-    console.log(defaultPrompt)
-    console.time(`image generation ${regenerateKey}`)
-    connection.send({
-      // model_name: 'runwayml/stable-diffusion-v1-5',
-      // model_name: 'stabilityai/stable-diffusion-xl-base-1.0',
-      prompt: prompt || defaultPrompt,
-      num_inference_steps: 10,
-      guidance_scale: 2,
-      sync_mode: true,
-      // seed: 123 + (regenerateKey ?? 0),
-      enable_safety_checker: false,
-      // format: 'jpeg',
-      image_size: {
-        width: 1024,
-        height: 1024,
-      },
-    })
-  }, [regenerateKey])
-
-  // if (!imageDataUrl) return <Box w="200px" aspectRatio="1/1" />
+    runStream(prompt)
+  }, [prompt])
 
   return (
     <canvas
       width="1024"
       height="1024"
       className={css({
-        w: '160px',
-        h: '160px',
-        borderRadius: 'full',
-        overflow: 'hidden',
-        filter: 'grayscale(1)',
+        w: 'full',
+        h: 'full',
+        imageRendering: 'pixelated',
       })}
       ref={outputCanvasRef}
     />
   )
-
-  // return <styled.img src={imageDataUrl} alt="Generated" w="200px" aspectRatio="1/1" />
 }
-
-// export function ImageFrame({ prompt, onComplete, regenerateKey }: ImageFrameProps) {
-//   const [isGenerating, setIsGenerating] = useState(false)
-//   const [imageDataUrl, setImageDataUrl] = useState<string | undefined>()
-
-//   const run = async () => {
-//     if (isGenerating) {
-//       return
-//     }
-
-//     const defaultPrompt = `lo-fi, esoteric, techno-code, ${getRandomAdjective()}, black ${getRandomSymbolicObject()} with transparent white background. image should be contained in the bounds of the frame and not be cropped, include stream of machine code, jagged interruptions, strange perspectives.`
-
-//     setIsGenerating(true)
-//     // setImageDataUrl(undefined)
-
-//     try {
-//       console.log('generate image')
-//       const url = await generate(prompt ?? defaultPrompt)
-//       setImageDataUrl(url)
-//     } catch (error) {
-//       console.error('Error generating image:', error)
-//     } finally {
-//       onComplete?.()
-//       setIsGenerating(false)
-//     }
-//   }
-
-//   useEffect(() => {
-//     run()
-//   }, [regenerateKey])
-
-//   if (!imageDataUrl) return null
-
-//   return <styled.img src={imageDataUrl} alt="Generated" w="100%" h="100%" />
-// }

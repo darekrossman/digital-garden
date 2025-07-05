@@ -1,49 +1,66 @@
 'use server'
 
 import { fal } from '@fal-ai/client'
+import { createStreamableValue } from 'ai/rsc'
 
-interface GenerateImageParams {
-  numSteps?: number
-  guidanceScale?: number
-  width?: number
-  height?: number
-  seed?: number
-  numImages?: number
-  syncMode?: boolean
-  enableSafetyChecker?: boolean
-}
-
-export async function generate(
-  inputs: string,
+const models = [
   {
-    numSteps = 6,
-    guidanceScale = 1.5,
-    width = 1024,
-    height = 1024,
-    seed = Math.random() * 1000000,
-    numImages = 1,
-    syncMode = false,
-    enableSafetyChecker = false,
-  }: GenerateImageParams = {},
-): Promise<string> {
-  console.log('generating image', inputs)
-
-  const result = await fal.subscribe('fal-ai/fast-lcm-diffusion', {
-    input: {
-      model_name: 'stabilityai/stable-diffusion-xl-base-1.0',
-      prompt: inputs,
-      num_inference_steps: numSteps,
-      guidance_scale: guidanceScale,
-      sync_mode: true,
-      num_images: 1,
-      enable_safety_checker: false,
-      format: 'jpeg',
-      image_size: {
-        width,
-        height,
-      },
+    name: 'fal-ai/flux-lora',
+    config: {
+      image_size: 'square',
+      num_inference_steps: 16,
+      guidance_scale: 3.5,
+      output_format: 'jpeg',
     },
-  })
+  },
+  {
+    name: 'fal-ai/hidream-i1-fast',
+    config: {
+      // image_size: 'square',
+      image_size: {
+        width: 256,
+        height: 256,
+      },
+      stream: true,
+      num_inference_steps: 8,
+      output_format: 'jpeg',
+    },
+  },
+]
 
-  return result.data.images[0].url
+export async function generateImage(prompt: string) {
+  const stream = createStreamableValue('')
+
+  const model = models[1]
+
+  const fullPrompt = `${prompt} Video game-style, pixel-art, high contrast, black and white, noir, chilling.`
+
+  console.log('\n\nGenerating Image ----------------')
+  console.log(model)
+  console.log()
+  console.log(fullPrompt)
+  console.log('---------------------------------')
+
+  const run = async () => {
+    const result = await fal.stream(model.name, {
+      input: {
+        prompt: fullPrompt,
+        num_images: 1,
+        seed: 123,
+        enable_safety_checker: false,
+
+        ...model.config,
+      },
+    })
+
+    for await (const event of result) {
+      stream.update(event.images?.[0]?.url)
+    }
+
+    stream.done()
+  }
+
+  run()
+
+  return { output: stream.value }
 }

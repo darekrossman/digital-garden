@@ -66,7 +66,7 @@ export const useLLMText = ({
     }
   }
   useEffect(() => {
-    generate(1)
+    // generate(1)
   }, [])
 
   useEffect(() => {

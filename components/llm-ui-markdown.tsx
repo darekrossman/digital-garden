@@ -8,38 +8,17 @@ import ReactMarkdown from 'react-markdown'
 interface MarkdownProps {
   children: string
   className?: string
-  regenerateKey: number
-  align?: 'left' | 'center' | 'right'
+  regenerateKey?: number
 }
 
-export function Markdown({ regenerateKey, children }: MarkdownProps) {
-  const low = useMemo(() => {
-    return Math.random() < 0.5
-  }, [regenerateKey])
-
-  const randomColor1 = useMemo(() => {
-    return `rgb(${[
-      Math.floor(Math.random() * 255),
-      Math.floor(Math.random() * 255),
-      Math.floor(Math.random() * 255),
-    ].join(',')})`
-  }, [regenerateKey])
-
+export function Markdown({ regenerateKey = 1, children }: MarkdownProps) {
   const components: ComponentProps<typeof ReactMarkdown>['components'] = useMemo(() => {
     return {
       h1(props) {
-        return <styled.h1 {...props} textAlign="left" />
+        return <styled.h1 {...props} fontFamily="pixel" fontSize="22px" lineHeight="28px" />
       },
       h2(props) {
-        return (
-          <styled.h2
-            {...props}
-            textAlign="left"
-            fontFamily="pixel"
-            fontSize="22px"
-            lineHeight="32px"
-          />
-        )
+        return <styled.h2 {...props} fontFamily="pixel" fontSize="22px" lineHeight="28px" />
       },
       h3(props) {
         return <styled.h3 {...props} />
@@ -54,7 +33,7 @@ export function Markdown({ regenerateKey, children }: MarkdownProps) {
         return <styled.h6 {...props} />
       },
       pre(props) {
-        return <styled.pre {...props} lineHeight="1.1em" fontSize="sm" />
+        return <styled.pre {...props} />
       },
       code(props) {
         return (
@@ -72,7 +51,7 @@ export function Markdown({ regenerateKey, children }: MarkdownProps) {
         return <styled.ul {...props} />
       },
       ol(props) {
-        return <styled.ol {...props} />
+        return <styled.ol {...props} listStyleType="decimal" pl="2em" />
       },
       li(props) {
         return <styled.li {...props} />
@@ -130,16 +109,15 @@ export function Markdown({ regenerateKey, children }: MarkdownProps) {
   }, [regenerateKey])
 
   return (
-    <Stack
+    <Box
       key={regenerateKey}
-      fontSize="12px"
-      lineHeight="1.2"
-      gap="0"
+      fontSize="16px"
+      lineHeight="1.6"
       className={css({
         // Typography spacing
         '& h1, & h2, & h3, & h4, & h5, & h6': {
           marginTop: '1.5em',
-          marginBottom: '0.5em',
+          marginBottom: '0.75em',
           '&:first-child': {
             marginTop: 0,
           },
@@ -153,7 +131,6 @@ export function Markdown({ regenerateKey, children }: MarkdownProps) {
         // List spacing
         '& ul, & ol': {
           marginBottom: '1em',
-          paddingLeft: '1.5em',
         },
         '& li': {
           marginBottom: '0.25em',
@@ -164,7 +141,7 @@ export function Markdown({ regenerateKey, children }: MarkdownProps) {
         // Blockquote spacing
         '& blockquote': {
           marginTop: '1em',
-          marginBottom: '1em',
+          marginBottom: '2em',
           paddingLeft: '1em',
           borderLeft: '2px solid currentColor',
           opacity: 0.8,
@@ -174,10 +151,10 @@ export function Markdown({ regenerateKey, children }: MarkdownProps) {
           marginTop: '1em',
           marginBottom: '1em',
           // padding: '0.75em',
-          backgroundColor: 'rgba(255, 255, 255, 0.05)',
           overflow: 'auto',
         },
         '& code': {
+          backgroundColor: 'rgba(255, 255, 255, 0.05)',
           // padding: '0.125em 0.25em',
           // color: 'white',
           // backgroundColor: 'black',
@@ -224,7 +201,7 @@ export function Markdown({ regenerateKey, children }: MarkdownProps) {
       })}
     >
       <ReactMarkdown components={components}>{children}</ReactMarkdown>
-    </Stack>
+    </Box>
   )
 }
 
