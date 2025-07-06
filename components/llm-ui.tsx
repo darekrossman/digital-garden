@@ -1,14 +1,8 @@
 'use client'
 
-import { generate } from '@/components/inference/chat-stream'
-import { getRandomAdjective, getRandomInt } from '@/lib/helpers'
-import { Box, Circle, Stack, styled } from '@/styled-system/jsx'
+import { getRandomAdjective } from '@/lib/helpers'
 import { useCompletion } from '@ai-sdk/react'
-import { readStreamableValue } from 'ai/rsc'
-import { AnimatePresence, motion } from 'framer-motion'
-import { ChatCompletionMessageParam } from 'openai/src/resources.js'
-import { startTransition, useCallback, useEffect, useRef, useState } from 'react'
-import { Markdown } from './llm-ui-markdown'
+import { useEffect, useRef } from 'react'
 
 export const useLLMText = ({
   pause,
