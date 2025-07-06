@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
         voice: voice,
         input: text,
         instructions: 'Speak in a deep, serious, but emotive tone, like a storyteller.',
-        speed: 1.25,
+        speed: 1.1,
         stream_format: 'sse',
       }),
     })

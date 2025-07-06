@@ -26,14 +26,14 @@ const models = [
     },
   },
   {
-    name: 'fal-ai/flux/dev',
+    name: 'rundiffusion-fal/juggernaut-flux/lightning',
     config: {
       image_size: {
         width: 256,
         height: 256,
       },
-      num_inference_steps: 16,
-      guidance_scale: 7,
+      num_inference_steps: 12,
+      // guidance_scale: 3.5,
       output_format: 'jpeg',
       sync_mode: true,
     },
@@ -56,33 +56,8 @@ export async function generateImage(prompt: string) {
 
   const model = models[2]
 
-  const fullPrompt = `${prompt} Video game-style, pixel-art, high contrast, black and white, noir, chilling.`
+  const fullPrompt = `${prompt} Artistic, illustrated, noir, chilling.`
 
-  console.log('\n\nGenerating Image ----------------')
-  console.log(model)
-  console.log()
-  console.log(fullPrompt)
-  console.log('---------------------------------')
-
-  const run = async () => {
-    // const result = await fal.subscribe(model.name, {
-    //   input: {
-    //     prompt: fullPrompt,
-    //     num_images: 1,
-    //     seed: 123,
-    //     enable_safety_checker: false,
-    //     ...model.config,
-    //   },
-    // })
-    // console.timeEnd('generateImage')
-    // for await (const event of result) {
-    //   stream.update(event.images?.[0]?.url)
-    // }
-    // stream.update(result.data.images?.[0]?.url)
-    // stream.done()
-  }
-
-  // run()
   console.time('generateImage')
   const result = await fal.subscribe(model.name, {
     input: {

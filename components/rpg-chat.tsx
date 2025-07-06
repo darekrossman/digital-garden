@@ -1,9 +1,10 @@
 'use client'
 
+import { createSystemPrompt } from '@/lib/rpg-prompts'
 import { rpgSchema } from '@/lib/rpg-schemas'
 import { Box, Flex, HStack, Stack, styled } from '@/styled-system/jsx'
 import { experimental_useObject as useObject } from '@ai-sdk/react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { z } from 'zod'
 import { AudioStreamer } from './inference/audio-stream'
 import { Markdown } from './llm-ui-markdown'
@@ -12,7 +13,7 @@ export type RPGObject = z.infer<typeof rpgSchema>
 
 type RPGMessage = {
   id?: number
-  role: 'user' | 'assistant'
+  role: 'user' | 'assistant' | 'system'
   content: string
 }
 
@@ -28,7 +29,8 @@ export const RPGChat = ({
   onLoadingChange?: (isLoading: boolean) => void
 }) => {
   const [messages, setMessages] = useState<RPGMessage[]>([
-    { id: 0, role: 'user', content: `Begin the story. ${Math.random() * 10000000000}` },
+    { id: 0, role: 'system', content: createSystemPrompt() },
+    { id: 0, role: 'user', content: `Begin the story.` },
   ])
   const [isPlayingAudio, setIsPlayingAudio] = useState(false)
   const [audioStreamer] = useState(() => new AudioStreamer())
@@ -36,6 +38,7 @@ export const RPGChat = ({
   const { object, submit, isLoading } = useObject({
     api: '/api/rpgchat',
     schema: rpgSchema,
+
     onFinish: async (result) => {
       console.log(result.object)
       if (result.object?.foundObject) {
@@ -70,7 +73,7 @@ export const RPGChat = ({
         setIsPlayingAudio(true)
         audioStreamer.play({
           text: object.story,
-          voice: 'fable',
+          voice: 'nova',
           onStart: () => console.log('Audio started'),
           onEnd: () => {
             console.log('Audio ended')
@@ -90,7 +93,7 @@ export const RPGChat = ({
   }, [isLoading])
 
   useEffect(() => {
-    if (messages.length === 1) {
+    if (messages.length === 2) {
       submit({ messages })
     }
   }, [])
