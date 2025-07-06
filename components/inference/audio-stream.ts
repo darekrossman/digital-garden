@@ -2,8 +2,6 @@ import OpenAI from 'openai'
 
 export interface AudioStreamOptions {
   text: string
-  voice?: string
-  speed?: number
   onStart?: () => void
   onEnd?: () => void
   onError?: (error: Error) => void
@@ -14,21 +12,19 @@ export class AudioStreamer {
   private mediaSource: MediaSource | null = null
 
   async play(options: AudioStreamOptions) {
-    const { text, voice = 'fable', speed = 1.1, onStart, onEnd, onError } = options
+    const { text, onStart, onEnd, onError } = options
 
     try {
       // Stop any currently playing audio
       this.stop()
 
-      const response = await fetch('/api/audio', {
+      const response = await fetch('/api/xi', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           text,
-          voice,
-          speed,
         }),
       })
 

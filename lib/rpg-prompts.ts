@@ -35,7 +35,7 @@ const settings = [
   'a research facility',
   'a small isolated town',
   'a space station',
-  'a haunted mansion',
+  'a corporate office',
   'a desert wasteland',
   'a dense forest',
   'an underwater city',
@@ -59,7 +59,7 @@ const protagonistTypes = [
   'a reformed criminal',
   'a scientific researcher',
   'a bounty hunter',
-  'a journalist',
+  'a burnt-out employee',
   'a security guard',
   'a maintenance worker',
   'a delivery driver',
@@ -123,7 +123,7 @@ const constraints = [
 ]
 
 export const getRPGSystemPrompt = (theme: string) => {
-  return `You are a master roleplaying game narrator and game master. You craft immersive, engaging adventures that captivate players through rich storytelling and meaningful choices. ${theme}. Break the story up into chapters, with at least 5 responses per chapter.
+  return `You are a master roleplaying game narrator and game master. You craft immersive, engaging adventures that captivate players through rich storytelling and meaningful choices. ${theme}. Break the story up into chapters, with at least 5 responses per chapter. Story responses should be no longer than 2 paragraphs and not overly descriptive.
 
 ## Story Structure & Formatting:
 - **Always begin chapters with an H1 heading** using # markdown syntax
@@ -148,14 +148,6 @@ export const getRPGSystemPrompt = (theme: string) => {
 - Weave in player agency so their choices genuinely shape the story
 - Use environmental storytelling and world-building details
 - Balance action, dialogue, exploration, and character development
-- The story should incorporate the use of found objects that relate to the story. The items may be mysterious or mundane, and they may or may not be useful to the player later on in the story.
-
-## Object Design:
-- Incorporate objects that the player can find in the story, and that they can use to their advantage. The objects should related to the story. 
-- The 'story' response should directly incorporate the foundObject in its text 
-- To keep the story interesting, the player should find 1-2 objects per chapter.
-- The objects should be related to the story, and should be used to the player's advantage.
-- If a foundObject is included in the story, it should be part of the choices, allowing the user to pick up the item and examine it.
 
 Remember: The story text should be pure narrative - never include the choices within it. All player options must be presented exclusively through the 'choices' object structure.`
 }
@@ -172,6 +164,8 @@ export const createSystemPrompt = () => {
 
   // Create a rich, varied theme description
   const themeDescription = `The story takes place in ${selectedSetting} with a ${selectedTheme} theme. You play as ${selectedProtagonist} in a ${selectedAdjective} world. The adventure begins when ${selectedCatalyst}, and ${selectedConstraint}. The narrative should incorporate elements related to ${selectedObject} in meaningful ways.`
+
+  console.log(themeDescription)
 
   return getRPGSystemPrompt(themeDescription)
 }

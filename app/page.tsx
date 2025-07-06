@@ -1,5 +1,5 @@
-import { RPGGame } from '@/components/rpg-game'
-import { Box } from '@/styled-system/jsx'
+import { GameProvider } from '@/components/game-context'
+import { GameWrapper } from '@/components/game-wrapper'
 import { unstable_ViewTransition as ViewTransition } from 'react'
 
 /**
@@ -8,9 +8,9 @@ import { unstable_ViewTransition as ViewTransition } from 'react'
 export default function Home() {
   return (
     <ViewTransition enter="glitch-in" exit="glitch-out">
-      <Box>
-        <RPGGame />
-      </Box>
+      <GameProvider>
+        <GameWrapper />
+      </GameProvider>
     </ViewTransition>
   )
 }

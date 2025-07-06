@@ -161,6 +161,7 @@ export function ImageFrame({ prompt }: ImageFrameProps) {
         w: 'full',
         h: 'full',
         imageRendering: 'pixelated',
+        objectFit: 'cover',
       })}
       ref={outputCanvasRef}
     />
