@@ -1,14 +1,8 @@
 'use client'
 
-import { generate } from '@/components/inference/chat-stream'
-import { getRandomInt } from '@/lib/helpers'
-import { Box, Circle, Stack, styled } from '@/styled-system/jsx'
+import { Box } from '@/styled-system/jsx'
 import { useCompletion } from '@ai-sdk/react'
-import { readStreamableValue } from 'ai/rsc'
-import { AnimatePresence, motion } from 'framer-motion'
-import { ChatCompletionMessageParam } from 'openai/src/resources.js'
-import { startTransition, useCallback, useEffect, useRef, useState } from 'react'
-import { ImageFrame } from './image-frame'
+import { useEffect, useRef } from 'react'
 import { Markdown } from './markdown'
 
 const defaultPrompt = `I'm driven by a mix of curiosity and anxiety — a restless fascination with the way complexity gives way to simplicity, and how beauty tends to emerge right at that edge. Early on, I fell in love with electronic music and interface design. I became obsessed with the tools — not just what they could do, but how they could shape ideas, expression, and interaction. My technical skills didn't come from a traditional path. They came from the need to bring creativity to life. I didn't set out to be a developer — I just wanted to make things. And in the process, I discovered that what really drives me is solving problems. That's the common thread in most creative work: understanding something deeply enough to shape it, challenge it, or make it sing. The web became my medium — a space where I could explore systems, sound, design, and behavior all at once. But over the last decade, I've come to care just as much about the people I build with as the things I build. Relationships, trust, clarity — these matter as much as code. I try to bring people along with me: to coach, teach, and share what I've learned. I move ahead only when I can help carry something heavier. I listen closely, because often the most important things people say aren't the ones they say directly. At the end of the day, I'm in it for those shared "wow" moments — the spark when something clicks, when an idea takes shape, when the work matters to more than just me.`
