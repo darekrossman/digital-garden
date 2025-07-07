@@ -303,20 +303,30 @@ export const RPGChat = ({
       </Flex>
 
       <Box position="relative">
-        <Center position="absolute" top="0px" left="8" h="full" fontSize="18px" lineHeight="0">
+        <Center
+          position="absolute"
+          top="0px"
+          left={{ base: '4', md: '8' }}
+          h="full"
+          fontSize={{ base: '14px', md: '18px' }}
+          lineHeight="0"
+        >
           ≫
         </Center>
         <styled.input
           w="full"
-          p="6"
-          px="6"
-          pl="16"
+          p={{ base: '4', md: '6' }}
+          px={{ base: '0', md: '6' }}
+          pl={{ base: '10', md: '16' }}
           fontSize="16px"
           lineHeight="1"
           borderTop="1px solid {var(--primary)}"
           placeholder="Choose an option or type your own..."
           _focus={{
             outline: 'none',
+          }}
+          _placeholder={{
+            fontSize: { base: '14px', md: '16px' },
           }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
