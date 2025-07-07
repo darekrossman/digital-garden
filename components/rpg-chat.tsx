@@ -11,6 +11,7 @@ import { RetroButton } from './ui/retro-button'
 import { Typewriter } from './typewriter'
 import { Panel } from './ui/panel'
 import * as motion from 'motion/react-client'
+import { css } from '@/styled-system/css'
 
 export type RPGObject = z.infer<typeof rpgSchema>
 
@@ -246,8 +247,8 @@ export const RPGChat = ({
             overflowX="hidden"
             css={{
               '&::-webkit-scrollbar': {
-                width: '20px',
-                height: '20px',
+                width: '16px',
+                height: '16px',
               },
               '&::-webkit-scrollbar-track': {
                 bg: 'var(--screen-bg)',
@@ -256,13 +257,13 @@ export const RPGChat = ({
               '&::-webkit-scrollbar-thumb': {
                 background: 'var(--primary)',
               },
-              scrollbarWidth: '20px',
+              scrollbarWidth: '16px',
             }}
           >
             <Stack minH="full">
               <Stack gap="8" flex="1" p={{ base: '6', md: '12' }}>
                 {lastUserMessage && (
-                  <styled.pre>
+                  <styled.pre hideBelow="md">
                     <styled.code
                       fontSize={{ base: '14px', md: '16px' }}
                       lineHeight="1.5"
@@ -291,10 +292,17 @@ export const RPGChat = ({
                     initial="hidden"
                     whileInView="visible"
                     variants={list}
-                    style={{ marginTop: '-12px', marginBottom: '12px' }}
+                    className={css({
+                      mt: { base: '-18px', md: '-12px' },
+                      mb: { base: '8px', md: '12px' },
+                    })}
                   >
                     {Object.values(object?.choices ?? {}).map((option: string) => (
-                      <motion.li key={option} variants={item} style={{ marginTop: '24px' }}>
+                      <motion.li
+                        key={option}
+                        variants={item}
+                        className={css({ mt: { base: '16px', md: '24px' } })}
+                      >
                         <RetroButton onClick={() => handleSubmit(option)}>{option}</RetroButton>
                       </motion.li>
                     ))}
