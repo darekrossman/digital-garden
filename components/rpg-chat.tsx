@@ -33,6 +33,7 @@ export const RPGChat = ({
   const [autoScroll, setAutoScroll] = useState(true)
   const isUserScrollingRef = useRef(false)
   const [typewriterText, setTypewriterText] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
 
   const { object, submit, isLoading } = useObject({
     api: '/api/rpgchat',
@@ -199,6 +200,9 @@ export const RPGChat = ({
     submit({ messages: newMessages })
     setShowOptions(false)
 
+    // Blur input field to hide mobile keyboard
+    inputRef.current?.blur()
+
     // Reactivate auto-scroll when user submits a new message
     setAutoScroll(true)
   }
@@ -313,28 +317,41 @@ export const RPGChat = ({
         >
           ≫
         </Center>
-        <styled.input
-          w="full"
-          p={{ base: '4', md: '6' }}
-          px={{ base: '0', md: '6' }}
-          pl={{ base: '10', md: '16' }}
-          fontSize="16px"
-          lineHeight="1"
-          borderTop="1px solid {var(--primary)}"
-          placeholder="Choose an option or type your own..."
-          _focus={{
-            outline: 'none',
-          }}
-          _placeholder={{
-            fontSize: { base: '14px', md: '16px' },
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              handleSubmit(e.currentTarget.value)
-              e.currentTarget.value = ''
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            const formData = new FormData(e.currentTarget)
+            const value = formData.get('message')
+            if (value) {
+              handleSubmit(value as string)
+              // Clear the input and blur it to hide mobile keyboard
+              e.currentTarget.reset()
+              inputRef.current?.blur()
             }
           }}
-        />
+        >
+          <styled.input
+            ref={inputRef}
+            name="message"
+            type="text"
+            w="full"
+            p={{ base: '4', md: '6' }}
+            px={{ base: '0', md: '6' }}
+            pl={{ base: '10', md: '16' }}
+            fontSize="16px"
+            lineHeight="1"
+            borderTop="1px solid {var(--primary)}"
+            placeholder="Choose an option or type your own..."
+            enterKeyHint="send"
+            autoComplete="off"
+            _focus={{
+              outline: 'none',
+            }}
+            _placeholder={{
+              fontSize: { base: '14px', md: '16px' },
+            }}
+          />
+        </form>
       </Box>
     </Panel>
   )
