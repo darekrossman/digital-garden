@@ -6,21 +6,22 @@ export const RetroButton = (props: HTMLStyledProps<'button'>) => {
       position="relative"
       display="flex"
       gap="2"
-      py="3"
-      px="4"
+      p="5"
       fontSize="16px"
       lineHeight="1.25"
       textAlign="left"
-      color="black"
-      bg="white/60"
-      border="3px outset {colors.black/60}"
+      border="1px solid {var(--primary)}"
+      boxShadow="4px 4px 0px {var(--primary)/35}"
       cursor="pointer"
       _hover={{
-        bg: 'white/40',
+        bg: 'var(--primary)',
+        color: 'var(--screen-bg)',
       }}
-      _active={{
-        border: '3px inset {colors.black/60}',
-      }}
+      _active={
+        {
+          // border: '3px inset {colors.black/60}',
+        }
+      }
       {...props}
     />
   )

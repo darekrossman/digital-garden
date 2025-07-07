@@ -14,13 +14,14 @@ const models = [
     },
   },
   {
-    name: 'fal-ai/flux/schnell',
+    name: 'fal-ai/flux/dev',
     config: {
       image_size: {
         width: 256,
         height: 256,
       },
       num_inference_steps: 12,
+      guidance_scale: 3.5,
       output_format: 'jpeg',
       sync_mode: true,
     },
@@ -33,7 +34,6 @@ const models = [
         height: 256,
       },
       num_inference_steps: 12,
-      // guidance_scale: 3.5,
       output_format: 'jpeg',
       sync_mode: true,
     },
@@ -54,7 +54,7 @@ const models = [
 export async function generateImage(prompt: string) {
   // const stream = createStreamableValue('')
 
-  const model = models[2]
+  const model = models[1]
 
   const fullPrompt = `${prompt} Artistic, illustrated, noir, chilling.`
 

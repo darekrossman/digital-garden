@@ -1,16 +1,16 @@
 'use client'
 
-import { createSystemPrompt } from '@/lib/rpg-prompts'
 import { rpgSchema } from '@/lib/rpg-schemas'
-import { Box, Center, Flex, HStack, Stack, styled } from '@/styled-system/jsx'
+import { Box, Center, Flex, Stack, styled } from '@/styled-system/jsx'
 import { experimental_useObject as useObject } from '@ai-sdk/react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { z } from 'zod'
 import { AudioStreamer } from './inference/audio-stream'
-import { Markdown } from './llm-ui-markdown'
 import { useGame } from './game-context'
 import { RetroButton } from './ui/retro-button'
-import { Scrollbar } from './scrollbar'
+import { Typewriter } from './typewriter'
+import { Panel } from './ui/panel'
+import * as motion from 'motion/react-client'
 
 export type RPGObject = z.infer<typeof rpgSchema>
 
@@ -22,17 +22,17 @@ type RPGMessage = {
 
 export const RPGChat = ({
   onFinish,
-  onSceneDescription,
-  onLoadingChange,
 }: {
   onFinish?: (object: RPGObject) => void
-  onSceneDescription?: (sceneDescription: string) => void
-  onLoadingChange?: (isLoading: boolean) => void
 }) => {
-  const { messages, addMessage, lastUserMessage } = useGame()
-  const scrollContainerRef = useRef<HTMLDivElement>(null)
-  const [isPlayingAudio, setIsPlayingAudio] = useState(false)
+  const { messages, addMessage, lastUserMessage, setSceneDescription, setIsLoading } = useGame()
   const [audioStreamer] = useState(() => new AudioStreamer())
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false)
+  const [showOptions, setShowOptions] = useState(false)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const [autoScroll, setAutoScroll] = useState(true)
+  const isUserScrollingRef = useRef(false)
+  const [typewriterText, setTypewriterText] = useState('')
 
   const { object, submit, isLoading } = useObject({
     api: '/api/rpgchat',
@@ -59,12 +59,12 @@ export const RPGChat = ({
 
   useEffect(() => {
     if (object?.sceneDescription && object?.story && isLoading) {
-      onSceneDescription?.(object.sceneDescription)
+      setSceneDescription(object.sceneDescription!)
     }
 
     if (object?.story && object?.choices && isLoading) {
       if (!isPlayingAudio) {
-        setIsPlayingAudio(true)
+        // setIsPlayingAudio(true)
         // audioStreamer.play({
         //   text: object.story,
         //   onStart: () => console.log('Audio started'),
@@ -82,7 +82,7 @@ export const RPGChat = ({
   }, [object?.sceneDescription, object?.story, object?.choices, isLoading])
 
   useEffect(() => {
-    onLoadingChange?.(isLoading)
+    setIsLoading(isLoading)
   }, [isLoading])
 
   // Cleanup audio when component unmounts
@@ -91,6 +91,98 @@ export const RPGChat = ({
       audioStreamer.stop()
     }
   }, [])
+
+  // Auto-scroll functionality
+  const scrollToBottom = () => {
+    if (scrollContainerRef.current && autoScroll) {
+      const container = scrollContainerRef.current
+      // Temporarily disable user scrolling detection during programmatic scroll
+      isUserScrollingRef.current = false
+      container.scrollTop = container.scrollHeight
+    }
+  }
+
+  const isAtBottom = () => {
+    if (!scrollContainerRef.current) return false
+    const container = scrollContainerRef.current
+    const threshold = 50 // Allow for some tolerance
+    return container.scrollTop + container.clientHeight >= container.scrollHeight - threshold
+  }
+
+  const handleScroll = () => {
+    if (!scrollContainerRef.current) return
+
+    const atBottom = isAtBottom()
+
+    if (atBottom && !autoScroll) {
+      // User scrolled to bottom, reactivate auto-scroll
+      setAutoScroll(true)
+    } else if (!atBottom && autoScroll && isUserScrollingRef.current) {
+      // User scrolled away from bottom manually, deactivate auto-scroll
+      setAutoScroll(false)
+    }
+  }
+
+  // Auto-scroll when content changes
+  useEffect(() => {
+    if (autoScroll) {
+      // Use a small delay to ensure content is rendered
+      const timer = setTimeout(() => {
+        scrollToBottom()
+      }, 10)
+      return () => clearTimeout(timer)
+    }
+  }, [object?.story, object?.choices, showOptions, autoScroll, typewriterText])
+
+  // Reset auto-scroll when content is cleared (new game/conversation)
+  useEffect(() => {
+    if (!object?.story && !lastUserMessage) {
+      setAutoScroll(true)
+      setTypewriterText('')
+    }
+  }, [object?.story, lastUserMessage])
+
+  // Reset typewriter text when story changes (new story starts)
+  useEffect(() => {
+    if (object?.story) {
+      setTypewriterText('')
+    }
+  }, [object?.story])
+
+  // Handle scroll events
+  useEffect(() => {
+    const container = scrollContainerRef.current
+    if (!container) return
+
+    let scrollTimeout: NodeJS.Timeout
+
+    const handleScrollEvent = () => {
+      // Clear any existing timeout
+      if (scrollTimeout) {
+        clearTimeout(scrollTimeout)
+      }
+
+      // Set flag to indicate user is scrolling
+      isUserScrollingRef.current = true
+
+      // Clear the flag after scrolling stops
+      scrollTimeout = setTimeout(() => {
+        isUserScrollingRef.current = false
+      }, 150)
+
+      // Handle auto-scroll logic
+      handleScroll()
+    }
+
+    container.addEventListener('scroll', handleScrollEvent, { passive: true })
+
+    return () => {
+      container.removeEventListener('scroll', handleScrollEvent)
+      if (scrollTimeout) {
+        clearTimeout(scrollTimeout)
+      }
+    }
+  }, [autoScroll])
 
   const handleSubmit = (selectedChoice?: string) => {
     if (!selectedChoice) return
@@ -104,20 +196,41 @@ export const RPGChat = ({
     const msg: RPGMessage = { role: 'user', content: selectedChoice }
     const newMessages = [...messages, msg]
     addMessage(msg)
-    console.log(messages)
     submit({ messages: newMessages })
+    setShowOptions(false)
+
+    // Reactivate auto-scroll when user submits a new message
+    setAutoScroll(true)
+  }
+
+  const list = {
+    visible: {
+      opacity: 1,
+      transition: {
+        delay: 0.6,
+        when: 'beforeChildren',
+        staggerChildren: 0.3,
+        duration: 0,
+      },
+    },
+    hidden: {
+      opacity: 0,
+      transition: {
+        when: 'afterChildren',
+        duration: 0,
+      },
+    },
+  }
+
+  const item = {
+    visible: { opacity: 1, transition: { duration: 0 } },
+    hidden: { opacity: 0, transition: { duration: 0 } },
   }
 
   return (
-    <Flex
-      h="full"
-      flexDirection="column"
-      border="1px solid white"
-      boxShadow="8px 8px 0px {colors.white/10}"
-      overflow="hidden"
-    >
+    <Panel h="full">
       <Flex justifyContent="flex-end" h="full" overflow="hidden">
-        <Center position="relative" w="full" h="full" overflow="hidden" bg="white/5">
+        <Center position="relative" w="full" h="full" overflow="hidden">
           <Flex
             ref={scrollContainerRef}
             w="full"
@@ -129,54 +242,59 @@ export const RPGChat = ({
             overflowX="hidden"
             css={{
               '&::-webkit-scrollbar': {
-                width: '16px',
-                height: '16px',
+                width: '20px',
+                height: '20px',
               },
               '&::-webkit-scrollbar-track': {
-                bg: 'transparent',
-                borderLeft: '1px solid white',
+                bg: 'var(--screen-bg)',
+                borderLeft: '1px solid {var(--primary)}',
               },
               '&::-webkit-scrollbar-thumb': {
-                background: 'white',
+                background: 'var(--primary)',
               },
-              scrollbarWidth: '16px',
-            }}
-            _after={{
-              content: '""',
-              position: 'absolute',
-              top: 0,
-              right: 0,
-              bottom: 0,
-              w: '16px',
-              bgImage: 'url(/images/dot.png)',
-              bgRepeat: 'repeat',
-              bgSize: '3px 3px',
-              opacity: '0.4',
+              scrollbarWidth: '20px',
             }}
           >
-            <Stack color="white/90" minH="full">
-              <Stack gap="8" flex="1" p="8">
+            <Stack minH="full">
+              <Stack gap="8" flex="1" p="12">
                 {lastUserMessage && (
-                  <HStack gap="3" color="white/50" alignItems="flex-start">
-                    <styled.p fontSize="18px" lineHeight="0" mt="10px">
-                      ≫
-                    </styled.p>
-                    <styled.p fontSize="16px" lineHeight="1.5" fontStyle="italic">
+                  <styled.pre>
+                    <styled.code
+                      fontSize="16px"
+                      lineHeight="1.5"
+                      fontStyle="italic"
+                      bg="var(--primary)"
+                      color="var(--screen-bg)"
+                      whiteSpace="pre-wrap"
+                    >
                       {lastUserMessage}
-                    </styled.p>
-                  </HStack>
+                    </styled.code>
+                  </styled.pre>
                 )}
 
-                <Markdown>{object?.story || ''}</Markdown>
+                <Typewriter
+                  text={object?.story || ''}
+                  onComplete={() => {
+                    setShowOptions(true)
+                  }}
+                  onTextChange={(displayedText) => {
+                    setTypewriterText(displayedText)
+                  }}
+                />
 
-                {object?.choices && (
-                  <Stack gap="5">
-                    {Object.values(object?.choices ?? {}).map((option: string, index: number) => (
-                      <RetroButton key={option} onClick={() => handleSubmit(option)}>
-                        {option}
-                      </RetroButton>
+                {object?.choices && showOptions && (
+                  <motion.ul
+                    initial="hidden"
+                    whileInView="visible"
+                    variants={list}
+                    style={{ marginTop: '-12px', marginBottom: '12px' }}
+                  >
+                    {Object.values(object?.choices ?? {}).map((option: string) => (
+                      <motion.li key={option} variants={item} style={{ marginTop: '24px' }}>
+                        <RetroButton onClick={() => handleSubmit(option)}>{option}</RetroButton>
+                      </motion.li>
                     ))}
-                  </Stack>
+                  </motion.ul>
                 )}
               </Stack>
             </Stack>
@@ -184,15 +302,19 @@ export const RPGChat = ({
         </Center>
       </Flex>
 
-      <Box>
+      <Box position="relative">
+        <Center position="absolute" top="0px" left="8" h="full" fontSize="18px" lineHeight="0">
+          ≫
+        </Center>
         <styled.input
           w="full"
           p="6"
           px="6"
-          bg="black"
-          color="white"
-          borderTop="1px solid {colors.white}"
-          placeholder="Type your own response..."
+          pl="16"
+          fontSize="16px"
+          lineHeight="1"
+          borderTop="1px solid {var(--primary)}"
+          placeholder="Choose an option or type your own..."
           _focus={{
             outline: 'none',
           }}
@@ -204,8 +326,6 @@ export const RPGChat = ({
           }}
         />
       </Box>
-    </Flex>
+    </Panel>
   )
 }
-
-// This function is no longer needed as we use the AudioStreamer instance directly

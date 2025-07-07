@@ -11,17 +11,38 @@ type RPGMessage = {
 
 interface GameContextType {
   messages: RPGMessage[]
-  addMessage: (message: RPGMessage) => void
+  sceneDescription: string
   lastUserMessage: string | undefined
   isStarted: boolean
+  isLoading: boolean
+  theme: {
+    screenBg: string
+    primary: string
+  }
+  setIsLoading: (isLoading: boolean) => void
+  setSceneDescription: (sceneDescription: string) => void
+  addMessage: (message: RPGMessage) => void
   startGame: () => void
+  setTheme: (theme: { screenBg: string; primary: string }) => void
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined)
 
-export function GameProvider({ children }: { children: ReactNode }) {
+export function GameProvider({
+  theme,
+  children,
+}: { theme?: { screenBg: string; primary: string }; children: ReactNode }) {
   const [isStarted, setIsStarted] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
   const [messages, setMessages] = useState<RPGMessage[]>([])
+  const [sceneDescription, setSceneDescription] = useState('')
+
+  const [_theme, setTheme] = useState(
+    theme || {
+      screenBg: 'black',
+      primary: 'rgb(255, 165, 0)',
+    },
+  )
 
   useEffect(() => {
     setMessages([
@@ -51,7 +72,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
     addMessage,
     lastUserMessage,
     isStarted,
+    isLoading,
+    setIsLoading,
     startGame,
+    theme: _theme,
+    setTheme,
+    sceneDescription,
+    setSceneDescription,
   }
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>

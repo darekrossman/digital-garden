@@ -1,32 +1,72 @@
 'use client'
 
-import { hexToColorMatrix } from '@/lib/helpers'
-import { Box, Center, Flex, Grid, HStack, Stack, styled } from '@/styled-system/jsx'
-import { token } from '@/styled-system/tokens'
-
-import { motion } from 'motion/react'
-import { useEffect, useState } from 'react'
-import { useRef } from 'react'
-import { ImageFrame } from './image-frame'
+import { Box, Flex, Grid, HStack, Stack } from '@/styled-system/jsx'
+import { useEffect, useRef } from 'react'
 import { RPGChat } from './rpg-chat'
+import { Panel } from './ui/panel'
+import { ImagePanel } from './image-panel'
 
 export function RPGGame() {
-  const [pause, setPause] = useState(false)
-
-  const [isLoading, setIsLoading] = useState(false)
-  const [sceneDescription, setSceneDescription] = useState<string | null>(null)
-
   const root = useRef<HTMLDivElement>(null)
+  useGlitch(root)
 
-  const rootColor = token('colors.neutral.500')
-  const dustMatrix = hexToColorMatrix(rootColor, '0 0 0 -40 10')
+  return (
+    <Flex
+      h="full"
+      w="full"
+      position="relative"
+      justifyContent="center"
+      alignItems="center"
+      flexDirection="column"
+    >
+      <Grid
+        ref={root}
+        gridTemplateColumns="1fr 1fr"
+        position="relative"
+        flex="1"
+        gap="12"
+        p="12"
+        overflow="hidden"
+        h="full"
+        w="full"
+        maxW="1200px"
+        maxH="1200px"
+        opacity="0"
+      >
+        {/* Chat */}
+        <RPGChat />
 
-  useEffect(() => {
-    if (isLoading) {
-      setSceneDescription(null)
-    }
-  }, [isLoading])
+        {/* UI */}
+        <Grid gridTemplateColumns="1fr" gridTemplateRows="auto 1fr" gap="12" minH="0">
+          <ImagePanel />
 
+          <Panel p="8" overflow="visible">
+            <Stack>
+              <HStack fontSize="lg">
+                HP:
+                <HStack gap="0">
+                  {Array.from({ length: 20 }, (_, i) => (
+                    <Box key={i}>▓</Box>
+                  ))}
+                </HStack>
+              </HStack>
+              <HStack fontSize="lg">
+                MP:
+                <HStack gap="0">
+                  {Array.from({ length: 20 }, (_, i) => (
+                    <Box key={i}>▓</Box>
+                  ))}
+                </HStack>
+              </HStack>
+            </Stack>
+          </Panel>
+        </Grid>
+      </Grid>
+    </Flex>
+  )
+}
+
+function useGlitch(root: React.RefObject<HTMLDivElement | null>) {
   useEffect(() => {
     root.current!.style.opacity = '1'
     glitch(3)
@@ -40,7 +80,7 @@ export function RPGGame() {
     return () => clearInterval(interval)
   }, [])
 
-  const glitch = (count = 1) => {
+  const glitch = (count = 1, ms?: number) => {
     if (count <= 0) return
 
     const el = root.current!
@@ -60,111 +100,13 @@ export function RPGGame() {
         setTimeout(
           () => {
             if (count > 0) {
-              glitch(count - 1)
+              glitch(count - 1, Math.floor(Math.random() * 50) + 50)
             }
           },
-          Math.floor(Math.random() * 50) + 50,
+          ms || Math.floor(Math.random() * 50) + 50,
         )
       },
-      Math.floor(Math.random() * 50) + 50,
+      ms || Math.floor(Math.random() * 50) + 50,
     )
   }
-
-  return (
-    <Flex
-      h="100dvh"
-      position="relative"
-      justifyContent="center"
-      alignItems="center"
-      flexDirection="column"
-      bg="black"
-    >
-      <Grid
-        ref={root}
-        gridTemplateColumns="1fr 1fr"
-        position="relative"
-        flex="1"
-        gap="12"
-        p="12"
-        overflow="hidden"
-        h="full"
-        w="full"
-        maxW="1200px"
-        maxH="1024px"
-        opacity="0"
-      >
-        {/* Chat */}
-        <RPGChat onSceneDescription={setSceneDescription} onLoadingChange={setIsLoading} />
-
-        {/* UI */}
-        <Grid gridTemplateColumns="1fr" gridTemplateRows="auto 1fr" gap="12" minH="0">
-          <Stack
-            w="full"
-            minH="0"
-            maxH="min-content"
-            gap="0"
-            border="1px solid white"
-            boxShadow="8px 8px 0px {colors.white/10}"
-            position="relative"
-            overflow="hidden"
-          >
-            <Box overflow="hidden">
-              <Box w="full" aspectRatio="1/1" maxH="100%">
-                <ImageFrame prompt={sceneDescription} />
-              </Box>
-            </Box>
-
-            <Center h="140px" p="8" color="white" bg="black" w="full" borderTop="1px solid white">
-              <styled.div fontSize="14px" fontStyle="italic" w="full" lineClamp="4">
-                {sceneDescription || (
-                  <motion.div
-                    animate={{
-                      color: ['#888888', '#ffffff', '#888888'],
-                    }}
-                    transition={{
-                      duration: 1.8,
-                      repeat: Infinity,
-                    }}
-                  >
-                    Loading...
-                  </motion.div>
-                )}
-              </styled.div>
-            </Center>
-          </Stack>
-
-          <Stack
-            position="relative"
-            p="8"
-            border="1px solid white"
-            boxShadow="8px 8px 0px {colors.white/10}"
-            overflow="visible"
-          >
-            <Stack color="white">
-              <HStack fontSize="lg">
-                HP:
-                <HStack gap="0">
-                  {Array.from({ length: 20 }, (_, i) => (
-                    <Box key={i} color="white">
-                      ▓
-                    </Box>
-                  ))}
-                </HStack>
-              </HStack>
-              <HStack fontSize="lg">
-                MP:
-                <HStack gap="0">
-                  {Array.from({ length: 20 }, (_, i) => (
-                    <Box key={i} color="white">
-                      ▓
-                    </Box>
-                  ))}
-                </HStack>
-              </HStack>
-            </Stack>
-          </Stack>
-        </Grid>
-      </Grid>
-    </Flex>
-  )
 }

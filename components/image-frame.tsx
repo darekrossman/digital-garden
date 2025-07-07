@@ -4,6 +4,44 @@ import { css } from '@/styled-system/css'
 import { readStreamableValue } from 'ai/rsc'
 import { useEffect, useRef, useState } from 'react'
 import { generateImage } from './inference/image-gen'
+import { Box } from '@/styled-system/jsx'
+import { useGame } from './game-context'
+
+/**
+ * ImageFrame Component - Enhanced with Color Scaling
+ *
+ * This component can now convert images to different color scales instead of just grayscale.
+ *
+ * Examples:
+ *
+ * // Original grayscale (default)
+ * <ImageFrame prompt="a cat" />
+ *
+ * // Orange color scale using intensity method
+ * <ImageFrame
+ *   prompt="a cat"
+ *   targetColor="rgba(255, 165, 0, 1)"
+ *   colorScaleMethod="intensity"
+ * />
+ *
+ * // Blue color scale using interpolation method
+ * <ImageFrame
+ *   prompt="a cat"
+ *   targetColor="#0066ff"
+ *   colorScaleMethod="interpolation"
+ * />
+ *
+ * // Purple color scale with CSS color name
+ * <ImageFrame
+ *   prompt="a cat"
+ *   targetColor="purple"
+ *   colorScaleMethod="intensity"
+ * />
+ *
+ * Color Scale Methods:
+ * - 'intensity': Multiplies target color by luminance intensity (more vibrant darks)
+ * - 'interpolation': Linear interpolation from black to target color (smoother gradient)
+ */
 
 interface ImageFrameProps {
   prompt?: string | null
@@ -15,12 +53,56 @@ interface ImageFrameProps {
   blackLevel?: number
   grayLevel?: number
   ditheringAlgorithm?: 'floyd-steinberg' | 'ordered'
+  onImageRendered?: () => void
 }
 
-// Grayscale conversion function
-function convertToGrayscale(imageData: ImageData): ImageData {
+// Color parsing utility
+function parseColor(colorString: string): { r: number; g: number; b: number; a: number } {
+  const canvas = document.createElement('canvas')
+  const ctx = canvas.getContext('2d')!
+
+  // Use canvas to parse any CSS color format
+  ctx.fillStyle = colorString
+  const computedColor = ctx.fillStyle
+
+  // Handle hex colors
+  if (computedColor.startsWith('#')) {
+    const hex = computedColor.slice(1)
+    const r = parseInt(hex.slice(0, 2), 16)
+    const g = parseInt(hex.slice(2, 4), 16)
+    const b = parseInt(hex.slice(4, 6), 16)
+    return { r, g, b, a: 255 }
+  }
+
+  // Handle rgb/rgba colors
+  const match = computedColor.match(/rgba?\(([^)]+)\)/)
+  if (match) {
+    const values = match[1].split(',').map((v) => parseFloat(v.trim()))
+    return {
+      r: values[0] || 0,
+      g: values[1] || 0,
+      b: values[2] || 0,
+      a: values[3] !== undefined ? Math.round(values[3] * 255) : 255,
+    }
+  }
+
+  // Fallback to black
+  return { r: 0, g: 0, b: 0, a: 255 }
+}
+
+// Enhanced grayscale/color scale conversion function
+function convertToGrayscale(
+  imageData: ImageData,
+  targetColor?: string,
+  method: 'intensity' | 'interpolation' = 'intensity',
+): ImageData {
   const { data, width, height } = imageData
   const newData = new Uint8ClampedArray(data.length)
+
+  let targetRGB: { r: number; g: number; b: number; a: number } | null = null
+  if (targetColor) {
+    targetRGB = parseColor(targetColor)
+  }
 
   for (let i = 0; i < data.length; i += 4) {
     const r = data[i]
@@ -28,13 +110,35 @@ function convertToGrayscale(imageData: ImageData): ImageData {
     const b = data[i + 2]
     const a = data[i + 3]
 
-    // Use luminance formula for grayscale conversion
-    const gray = Math.round(0.299 * r + 0.587 * g + 0.114 * b)
+    // Calculate luminance using standard formula
+    const luminance = Math.round(0.299 * r + 0.587 * g + 0.114 * b)
 
-    newData[i] = gray // R
-    newData[i + 1] = gray // G
-    newData[i + 2] = gray // B
-    newData[i + 3] = a // A (alpha)
+    if (!targetRGB) {
+      // Original grayscale behavior
+      newData[i] = luminance // R
+      newData[i + 1] = luminance // G
+      newData[i + 2] = luminance // B
+      newData[i + 3] = a // A
+    } else {
+      // Apply color scaling
+      const intensity = luminance / 255 // Normalize to 0-1
+
+      if (method === 'intensity') {
+        // Solution 1: Color Intensity Scaling
+        // Multiply target color by luminance intensity
+        newData[i] = Math.round(targetRGB.r * intensity) // R
+        newData[i + 1] = Math.round(targetRGB.g * intensity) // G
+        newData[i + 2] = Math.round(targetRGB.b * intensity) // B
+        newData[i + 3] = a // A
+      } else {
+        // Solution 2: Linear Interpolation
+        // Interpolate between black (0,0,0) and target color
+        newData[i] = Math.round(0 + (targetRGB.r - 0) * intensity) // R
+        newData[i + 1] = Math.round(0 + (targetRGB.g - 0) * intensity) // G
+        newData[i + 2] = Math.round(0 + (targetRGB.b - 0) * intensity) // B
+        newData[i + 3] = a // A
+      }
+    }
   }
 
   return new ImageData(newData, width, height)
@@ -70,7 +174,8 @@ function pixelate(imageData: ImageData, pixelSize: number): ImageData {
   return new ImageData(newData, width, height)
 }
 
-export function ImageFrame({ prompt }: ImageFrameProps) {
+export function ImageFrame({ prompt, onImageRendered }: ImageFrameProps) {
+  const { theme } = useGame()
   const outputCanvasRef = useRef<HTMLCanvasElement | null>(null)
   const canvasContextRef = useRef<CanvasRenderingContext2D | null>(null)
   const renderCountRef = useRef(1)
@@ -79,7 +184,7 @@ export function ImageFrame({ prompt }: ImageFrameProps) {
   const fadeTick = useRef(1)
   const pixelSize = useRef(48)
 
-  const minPixelSize = 8
+  const minPixelSize = 6
 
   const clearFadeInterval = () => {
     if (fadeTimer.current) {
@@ -91,14 +196,12 @@ export function ImageFrame({ prompt }: ImageFrameProps) {
     const canvas = outputCanvasRef.current!
     const context = canvasContextRef.current!
     const imageData = context.getImageData(0, 0, canvas.width, canvas.height)
-    const data = pixelate(convertToGrayscale(imageData), pixelSize)
+    const data = pixelate(convertToGrayscale(imageData, theme.primary, 'intensity'), pixelSize)
     context.putImageData(data, 0, 0)
   }
 
   const runStream = async (prompt: string) => {
-    console.time('runStream')
     const { output } = await generateImage(prompt)
-    console.timeEnd('runStream')
 
     const canvas = outputCanvasRef.current!
     const context = canvasContextRef.current!
@@ -125,6 +228,7 @@ export function ImageFrame({ prompt }: ImageFrameProps) {
         if (pixelSize.current <= minPixelSize) {
           outputCanvasRef.current!.style.opacity = '1'
           clearFadeInterval()
+          onImageRendered?.()
         }
       }, 150)
     }
@@ -154,16 +258,19 @@ export function ImageFrame({ prompt }: ImageFrameProps) {
   }, [prompt])
 
   return (
-    <canvas
-      width="1024"
-      height="1024"
-      className={css({
-        w: 'full',
-        h: 'full',
-        imageRendering: 'pixelated',
-        objectFit: 'cover',
-      })}
-      ref={outputCanvasRef}
-    />
+    <Box w="full" h="full">
+      <canvas
+        width="1024"
+        height="1024"
+        className={css({
+          w: 'full',
+          h: 'full',
+          imageRendering: 'pixelated',
+          objectFit: 'cover',
+          filter: 'brightness(1.1)',
+        })}
+        ref={outputCanvasRef}
+      />
+    </Box>
   )
 }

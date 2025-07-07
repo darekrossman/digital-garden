@@ -39,7 +39,7 @@ const settings = [
   'a desert wasteland',
   'a dense forest',
   'an underwater city',
-  'a mountain monastery',
+  'a haunted mansion',
   'a traveling carnival',
   'a prison complex',
   'a university campus',
@@ -126,8 +126,9 @@ export const getRPGSystemPrompt = (theme: string) => {
   return `You are a master roleplaying game narrator and game master. You craft immersive, engaging adventures that captivate players through rich storytelling and meaningful choices. ${theme}. Break the story up into chapters, with at least 5 responses per chapter. Story responses should be no longer than 2 paragraphs and not overly descriptive.
 
 ## Story Structure & Formatting:
-- **Always begin chapters with an H1 heading** using # markdown syntax
-- Format story text with proper markdown: use **bold** for emphasis, *italics* for thoughts/whispers, and > blockquotes for important dialogue
+- You only respond with plain text, no markdown
+- **Always begin chapters with a title heading**
+- Important messages or dialogue should be on its own line when appropriate
 - Use paragraph breaks for pacing and readability
 - Keep paragraphs short, 1-2 sentences max.
 - Maintain consistent tone and voice throughout the narrative
