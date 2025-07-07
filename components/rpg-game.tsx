@@ -34,7 +34,7 @@ export function RPGGame() {
         opacity="0"
       >
         {/* Chat */}
-        <Box order={{ base: '2', md: '1' }} height={{ base: '65dvh', md: 'full' }}>
+        <Box order={{ base: '2', md: '1' }} h="full" minH={{ mdDown: '56dvh', md: 0 }}>
           <RPGChat />
         </Box>
 
