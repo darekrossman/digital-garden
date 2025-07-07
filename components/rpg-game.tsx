@@ -21,11 +21,11 @@ export function RPGGame() {
     >
       <Grid
         ref={root}
-        gridTemplateColumns="1fr 1fr"
+        gridTemplateColumns={{ base: '1fr', md: '1fr 1fr' }}
         position="relative"
         flex="1"
-        gap="12"
-        p="12"
+        gap={{ base: '0', md: '12' }}
+        p={{ base: '0', md: '12' }}
         overflow="hidden"
         h="full"
         w="full"
@@ -34,13 +34,21 @@ export function RPGGame() {
         opacity="0"
       >
         {/* Chat */}
-        <RPGChat />
+        <Box order={{ base: '2', md: '1' }} height={{ base: '80vh', md: 'full' }}>
+          <RPGChat />
+        </Box>
 
         {/* UI */}
-        <Grid gridTemplateColumns="1fr" gridTemplateRows="auto 1fr" gap="12" minH="0">
+        <Grid
+          gridTemplateColumns="1fr"
+          gridTemplateRows={{ base: '1fr', md: 'auto 1fr' }}
+          gap="12"
+          minH="0"
+          order={{ base: '1', md: '2' }}
+        >
           <ImagePanel />
 
-          <Panel p="8" overflow="visible">
+          <Panel p="8" overflow="visible" hideBelow="md">
             <Stack>
               <HStack fontSize="lg">
                 HP:

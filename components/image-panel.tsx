@@ -26,7 +26,7 @@ export const ImagePanel = () => {
         </Box>
       </Box>
 
-      <Box h="154px" p="8" w="full" borderTop="1px solid {var(--primary)}">
+      <Box h="154px" p="8" w="full" borderTop="1px solid {var(--primary)}" hideBelow="md">
         <styled.p fontSize="14px" fontStyle="italic" lineClamp="5">
           {isImageRendered ? sceneDescription : '...'}
         </styled.p>

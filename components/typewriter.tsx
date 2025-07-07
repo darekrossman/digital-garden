@@ -133,7 +133,12 @@ export const Typewriter = ({
 
   return (
     <styled.div position="relative">
-      <styled.div fontSize="16px" lineHeight="1.6" whiteSpace="pre-wrap" fontFamily="monospace">
+      <styled.div
+        fontSize={{ base: '14px', md: '16px' }}
+        lineHeight="1.5"
+        whiteSpace="pre-wrap"
+        fontFamily="monospace"
+      >
         {displayedText}
         <styled.span
           display="inline-block"

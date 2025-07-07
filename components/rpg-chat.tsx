@@ -256,11 +256,11 @@ export const RPGChat = ({
             }}
           >
             <Stack minH="full">
-              <Stack gap="8" flex="1" p="12">
+              <Stack gap="8" flex="1" p={{ base: '6', md: '12' }}>
                 {lastUserMessage && (
                   <styled.pre>
                     <styled.code
-                      fontSize="16px"
+                      fontSize={{ base: '14px', md: '16px' }}
                       lineHeight="1.5"
                       fontStyle="italic"
                       bg="var(--primary)"

@@ -5,7 +5,7 @@ export const Panel = ({ children, ...props }: { children: React.ReactNode } & Fl
     <Flex
       flexDirection="column"
       border="1px solid {var(--primary)}"
-      boxShadow="8px 8px 0px {var(--primary)/15}"
+      boxShadow={{ md: '8px 8px 0px {var(--primary)/15}' }}
       overflow="hidden"
       {...props}
     >

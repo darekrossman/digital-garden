@@ -6,8 +6,8 @@ export const RetroButton = (props: HTMLStyledProps<'button'>) => {
       position="relative"
       display="flex"
       gap="2"
-      p="5"
-      fontSize="16px"
+      p={{ base: '4', md: '5' }}
+      fontSize={{ base: '14px', md: '16px' }}
       lineHeight="1.25"
       textAlign="left"
       border="1px solid {var(--primary)}"
