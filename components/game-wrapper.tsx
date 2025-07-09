@@ -7,7 +7,7 @@ import { RPGGame } from './rpg-game'
 import { RetroButton } from './ui/retro-button'
 
 export const GameWrapper = () => {
-  const { isStarted, startGame, theme } = useGame()
+  const { isStarted, theme, generatePlot, isGeneratingPlot } = useGame()
 
   return (
     <Flex
@@ -23,9 +23,13 @@ export const GameWrapper = () => {
         } as React.CSSProperties
       }
     >
-      {!isStarted ? (
+      {isGeneratingPlot ? (
         <Center flex="1">
-          <RetroButton onClick={startGame}>Start Game</RetroButton>
+          <styled.p>Generating plot...</styled.p>
+        </Center>
+      ) : !isStarted ? (
+        <Center flex="1">
+          <RetroButton onClick={generatePlot}>Start Game</RetroButton>
         </Center>
       ) : (
         <RPGGame />

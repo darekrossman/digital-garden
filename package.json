@@ -24,12 +24,12 @@
     "@react-three/fiber": "^9.1.4",
     "@react-three/postprocessing": "^3.0.4",
     "@xterm/xterm": "^5.5.0",
-    "ai": "^4.3.16",
+    "ai": "5.0.0-beta.9",
     "animejs": "^4.0.2",
-    "leva": "^0.10.0",
     "motion": "^12.10.5",
     "next": "15.3.2",
     "openai": "^4.98.0",
+    "radix-ui": "^1.4.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-markdown": "^10.1.0",
@@ -48,6 +48,8 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/three": "^0.176.0",
+    "dotenv": "^17.1.0",
+    "tsx": "^4.20.3",
     "typescript": "^5"
   }
 }

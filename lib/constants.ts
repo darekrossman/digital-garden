@@ -220,6 +220,89 @@ export const symbolicObjects = [
 ]
 
 /**
+ * Inventory objects that can be picked up and used in RPG scenarios
+ * Spans various themes from cyberpunk to gothic horror to space opera
+ */
+export const inventoryObjects = [
+  // Cyberpunk/Tech
+  'data disk',
+  'neural implant',
+  'holo-projector',
+  'encrypted tablet',
+  'access card',
+  'cybernetic eye',
+  'memory chip',
+  'bio-scanner',
+  'neon key card',
+  'virus program',
+  'drone remote',
+  'AR visor',
+
+  // Post-Apocalyptic
+  'radiation detector',
+  'gas mask',
+  'scrap metal',
+  'purification tablets',
+  'solar battery',
+  'rusty knife',
+  'water filter',
+  'salvaged wire',
+  'fuel canister',
+  'hazmat suit',
+  'geiger counter',
+
+  // Gothic Horror/Supernatural
+  'silver cross',
+  'wooden stake',
+  'holy water',
+  'blessed amulet',
+  'iron nail',
+  'ancient tome',
+  'ritual candle',
+  'protective ward',
+  'bone fragment',
+  'cursed mirror',
+  'vial of blood',
+
+  // Steampunk/Mechanical
+  'brass key',
+  'steam valve',
+  'copper gear',
+  'clockwork device',
+  'pressure gauge',
+  'mechanical wrench',
+  'coal sample',
+  'steam whistle',
+  'brass compass',
+  'gear assembly',
+
+  // Space/Sci-Fi
+  'plasma cell',
+  'gravity boots',
+  'star chart',
+  'oxygen canister',
+  'quantum crystal',
+  'alien artifact',
+  'space suit helmet',
+  'energy core',
+  'warp drive component',
+  'scanning probe',
+  'cosmic dust sample',
+
+  // Detective/Noir
+  'evidence bag',
+  'magnifying glass',
+  'cigarette case',
+  'old photograph',
+  'case file',
+  'police badge',
+  'witness statement',
+  'fingerprint kit',
+  'surveillance tape',
+  'coffee stained note',
+]
+
+/**
  * Default intro text for the portfolio
  */
 export const defaultIntro = {

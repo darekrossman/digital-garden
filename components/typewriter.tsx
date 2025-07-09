@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react'
 // Typewriter component for character-by-character text reveal
 export const Typewriter = ({
   text,
-  speed = 50,
+  speed = 44,
   onComplete,
   onTextChange,
 }: {

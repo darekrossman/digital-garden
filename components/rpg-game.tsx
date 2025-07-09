@@ -1,76 +1,98 @@
 'use client'
 
-import { Box, Flex, Grid, HStack, Stack } from '@/styled-system/jsx'
+import { Box, Center, Flex, Grid, HStack, Stack, styled } from '@/styled-system/jsx'
 import { useEffect, useRef } from 'react'
 import { RPGChat } from './rpg-chat'
 import { Panel } from './ui/panel'
 import { ImagePanel } from './image-panel'
+import { VideoCanvas } from './video-canvas'
+import { ImageFrame } from './image-frame'
+import { useGame } from './game-context'
+import { InventoryDialog } from './inventory'
 
 export function RPGGame() {
+  const { plot } = useGame()
+
   const root = useRef<HTMLDivElement>(null)
   useGlitch(root)
 
+  useEffect(() => {
+    //
+  }, [])
+
   return (
-    <Flex
-      h="full"
-      w="full"
-      position="relative"
-      justifyContent="center"
-      alignItems="center"
-      flexDirection="column"
-    >
-      <Grid
-        ref={root}
-        gridTemplateColumns={{ base: '1fr', md: '1fr 1fr' }}
-        position="relative"
-        flex="1"
-        gap={{ base: '0', md: '12' }}
-        p={{ base: '0', md: '12' }}
-        overflow="hidden"
-        h="full"
-        w="full"
-        maxW="1200px"
-        maxH="1200px"
-        opacity="0"
-      >
-        {/* Chat */}
-        <Box order={{ base: '2', md: '1' }} h="full" minH={{ mdDown: '56dvh', md: 0 }}>
-          <RPGChat />
-        </Box>
+    <Center w="full" h="full">
+      <Stack h="full" w="full" maxW="1200px" p={{ base: '0', md: '12' }}>
+        <Flex alignItems="center" justifyContent="start" w="full">
+          <styled.h1 fontSize="16px" fontWeight="bold">
+            {plot?.title}
+          </styled.h1>
+        </Flex>
 
-        {/* UI */}
         <Grid
-          gridTemplateColumns="1fr"
-          gridTemplateRows={{ base: '1fr', md: 'auto 1fr' }}
-          gap="12"
+          ref={root}
+          gridTemplateColumns={{ base: '1fr', md: '1fr 1fr' }}
+          position="relative"
+          flex="1"
+          gap={{ base: '0', md: '12' }}
+          overflow="visible"
           minH="0"
-          order={{ base: '1', md: '2' }}
+          h="full"
+          w="full"
+          maxH="1200px"
+          opacity="0"
         >
-          <ImagePanel />
+          {/* Chat */}
+          <Box order={{ base: '2', md: '1' }} h="full" minH={{ mdDown: '56dvh', md: 0 }}>
+            <RPGChat />
+          </Box>
 
-          <Panel p="8" overflow="visible" hideBelow="md">
-            <Stack>
-              <HStack fontSize="lg">
-                HP:
-                <HStack gap="0">
-                  {Array.from({ length: 20 }, (_, i) => (
-                    <Box key={i}>▓</Box>
-                  ))}
-                </HStack>
-              </HStack>
-              <HStack fontSize="lg">
-                MP:
-                <HStack gap="0">
-                  {Array.from({ length: 20 }, (_, i) => (
-                    <Box key={i}>▓</Box>
-                  ))}
-                </HStack>
-              </HStack>
-            </Stack>
-          </Panel>
+          {/* UI */}
+          <Grid
+            gridTemplateColumns="1fr"
+            gridTemplateRows={{ base: '1fr', md: 'auto 1fr' }}
+            gap="12"
+            minH="0"
+            order={{ base: '1', md: '2' }}
+          >
+            <ImagePanel />
+
+            <Panel p="8" overflow="visible" hideBelow="md">
+              <Flex gap="8">
+                <Box w="140px" h="140px" position="relative" border="1px solid var(--primary)">
+                  <ImageFrame prompt={plot?.playerImagePrompt} minPixelSize={2} />
+                </Box>
+
+                <Stack>
+                  <styled.p fontSize="16px">{plot?.playerName}</styled.p>
+
+                  <HStack fontSize="lg">
+                    HP:
+                    <HStack gap="0">
+                      {Array.from({ length: 20 }, (_, i) => (
+                        <Box key={i}>▓</Box>
+                      ))}
+                    </HStack>
+                  </HStack>
+                  <HStack fontSize="lg">
+                    MP:
+                    <HStack gap="0">
+                      {Array.from({ length: 20 }, (_, i) => (
+                        <Box key={i}>▓</Box>
+                      ))}
+                    </HStack>
+                  </HStack>
+                </Stack>
+              </Flex>
+            </Panel>
+          </Grid>
         </Grid>
-      </Grid>
-    </Flex>
+
+        <InventoryDialog />
+
+        {/* <audio src="/audio/8-Bit Dark Music.mp3" autoPlay loop /> */}
+      </Stack>
+    </Center>
   )
 }
 

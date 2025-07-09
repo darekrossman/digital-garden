@@ -26,7 +26,14 @@ export const RPGChat = ({
 }: {
   onFinish?: (object: RPGObject) => void
 }) => {
-  const { messages, addMessage, lastUserMessage, setSceneDescription, setIsLoading } = useGame()
+  const {
+    messages,
+    addMessage,
+    lastUserMessage,
+    setSceneDescription,
+    setIsLoading,
+    setImagePrompt,
+  } = useGame()
   const [audioStreamer] = useState(() => new AudioStreamer())
   const [isPlayingAudio, setIsPlayingAudio] = useState(false)
   const [showOptions, setShowOptions] = useState(false)
@@ -60,28 +67,36 @@ export const RPGChat = ({
   }, [])
 
   useEffect(() => {
-    if (object?.sceneDescription && object?.story && isLoading) {
-      setSceneDescription(object.sceneDescription!)
-    }
+    if (!object) return
 
-    if (object?.story && object?.choices && isLoading) {
-      if (!isPlayingAudio) {
-        // setIsPlayingAudio(true)
-        // audioStreamer.play({
-        //   text: object.story,
-        //   onStart: () => console.log('Audio started'),
-        //   onEnd: () => {
-        //     console.log('Audio ended')
-        //     setIsPlayingAudio(false)
-        //   },
-        //   onError: (error) => {
-        //     console.error('Audio error:', error)
-        //     setIsPlayingAudio(false)
-        //   },
-        // })
+    if (isLoading) {
+      if (object?.story && object?.imagePrompt) {
+        setImagePrompt(object.imagePrompt)
+      }
+
+      if (object?.choices && object?.sceneDescription) {
+        setSceneDescription(object.sceneDescription!)
+      }
+
+      if (object?.choices && object?.story) {
+        if (!isPlayingAudio) {
+          // setIsPlayingAudio(true)
+          // audioStreamer.play({
+          //   text: object.story,
+          //   onStart: () => console.log('Audio started'),
+          //   onEnd: () => {
+          //     console.log('Audio ended')
+          //     setIsPlayingAudio(false)
+          //   },
+          //   onError: (error) => {
+          //     console.error('Audio error:', error)
+          //     setIsPlayingAudio(false)
+          //   },
+          // })
+        }
       }
     }
-  }, [object?.sceneDescription, object?.story, object?.choices, isLoading])
+  }, [object, isLoading])
 
   useEffect(() => {
     setIsLoading(isLoading)
@@ -145,11 +160,11 @@ export const RPGChat = ({
   }, [object?.story, lastUserMessage])
 
   // Reset typewriter text when story changes (new story starts)
-  useEffect(() => {
-    if (object?.story) {
-      setTypewriterText('')
-    }
-  }, [object?.story])
+  // useEffect(() => {
+  //   if (object?.story) {
+  //     setTypewriterText('')
+  //   }
+  // }, [object?.story])
 
   // Handle scroll events
   useEffect(() => {
@@ -290,7 +305,7 @@ export const RPGChat = ({
                 {object?.choices && showOptions && (
                   <motion.ul
                     initial="hidden"
-                    whileInView="visible"
+                    animate="visible"
                     variants={list}
                     className={css({
                       mt: { base: '-18px', md: '-12px' },
@@ -303,7 +318,9 @@ export const RPGChat = ({
                         variants={item}
                         className={css({ mt: { base: '16px', md: '24px' } })}
                       >
-                        <RetroButton onClick={() => handleSubmit(option)}>{option}</RetroButton>
+                        <RetroButton w="full" onClick={() => handleSubmit(option)}>
+                          {option}
+                        </RetroButton>
                       </motion.li>
                     ))}
                   </motion.ul>
