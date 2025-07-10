@@ -10,9 +10,15 @@ interface ImageFrameProps {
   prompt?: string | null
   minPixelSize?: number
   onImageRendered?: () => void
+  onImageGenerated?: (str: string) => void
 }
 
-export function ImageFrame({ prompt, minPixelSize = 6, onImageRendered }: ImageFrameProps) {
+export function ImageFrame({
+  prompt,
+  minPixelSize = 6,
+  onImageRendered,
+  onImageGenerated,
+}: ImageFrameProps) {
   const { theme } = useGame()
   const containerRef = useRef<HTMLDivElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -66,7 +72,6 @@ export function ImageFrame({ prompt, minPixelSize = 6, onImageRendered }: ImageF
           canvas: offscreenCanvas,
           width: dimensions.width,
           height: dimensions.width,
-          targetColor: theme.primary,
         },
       },
       [offscreenCanvas],
@@ -91,6 +96,10 @@ export function ImageFrame({ prompt, minPixelSize = 6, onImageRendered }: ImageF
         pixelSize: minPixelSize,
       },
     })
+
+    if (img) {
+      process({ img })
+    }
   }, [theme.primary, minPixelSize, dimensions])
 
   // Update canvas dimensions when they change
@@ -193,6 +202,8 @@ export function ImageFrame({ prompt, minPixelSize = 6, onImageRendered }: ImageF
     const { output } = await generateImage(prompt)
     const img = new Image()
 
+    onImageGenerated?.(output)
+
     img.src = output
     img.onload = async () => {
       setImg(img)
@@ -207,10 +218,8 @@ export function ImageFrame({ prompt, minPixelSize = 6, onImageRendered }: ImageF
       return
     }
 
-    console.log('dimensions', dimensions)
-
     if (prevPromptRef.current !== prompt) {
-      console.log('generate')
+      console.log('generating image')
       runStream(prompt)
       prevPromptRef.current = prompt
     }

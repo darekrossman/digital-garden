@@ -16,6 +16,7 @@ export const GameWrapper = () => {
       flex="1"
       bg="var(--screen-bg)"
       color="var(--primary)"
+      fontFamily="mono"
       style={
         {
           '--screen-bg': theme.screenBg,

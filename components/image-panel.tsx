@@ -33,8 +33,8 @@ export const ImagePanel = () => {
         </Box>
       </Box>
 
-      <Box minH="133px" p="8" w="full" borderTop="1px solid {var(--primary)}" hideBelow="md">
-        <styled.p fontSize="14px" fontStyle="italic" mt="-1px" lineClamp="4">
+      <Box minH="133px" p="6" w="full" borderTop="1px solid {var(--primary)}" hideBelow="md">
+        <styled.p fontSize="sm" fontStyle="italic" mt="-1px" lineClamp="4">
           {isImageRendered ? sceneDescription : '...'}
         </styled.p>
       </Box>

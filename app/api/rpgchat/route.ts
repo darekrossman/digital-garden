@@ -15,6 +15,7 @@ export async function POST(req: Request) {
     system: systemPrompt.content,
     messages: restMessages,
     temperature: 0.3,
+    seed: 543,
     schema: rpgSchema,
     onError({ error }) {
       console.error(error)

@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
   const { text } = await req.json()
 
   const createAudioStreamFromText = async (text: string) => {
-    const audioStream = await elevenlabs.textToSpeech.stream('NOpBlnGInO9m6vDvFkFC', {
+    const audioStream = await elevenlabs.textToSpeech.stream('flHkNRp1BlvT73UL6gyz', {
       modelId: 'eleven_flash_v2_5',
       text,
       outputFormat: 'mp3_44100_128',

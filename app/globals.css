@@ -6,7 +6,7 @@
 }
 
 html {
-  font-size: var(--font-sizes-xs);
+  font-size: 16px;
   -webkit-font-smoothing: auto;
   -moz-osx-font-smoothing: grayscale;
   scroll-snap-type: y mandatory;

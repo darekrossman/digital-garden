@@ -12,13 +12,13 @@ const models = [
     },
   },
   {
-    name: 'fal-ai/flux-1/dev',
+    name: 'fal-ai/flux/dev',
     config: {
       image_size: {
         width: 480,
         height: 480,
       },
-      num_inference_steps: 16,
+      num_inference_steps: 28,
       guidance_scale: 3.5,
     },
   },
@@ -91,7 +91,7 @@ export async function generateImage(prompt: string) {
       enable_safety_checker: false,
       output_format: 'jpeg',
       sync_mode: true,
-      // seed: 123739873675962,
+      seed: 123739873675962,
 
       ...model.config,
     },

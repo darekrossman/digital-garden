@@ -134,8 +134,30 @@ Generate a plot that includes:
 - A unique player character with a distinctive name and background
 - A close-up portrait image prompt of the player character's face that captures their appearance, expression, and personality
 
+## Player Description:
+The player description should be comprehensive and include all relevant details about the player character. Use line breaks to make the description more readable.
+
+## Player Image Prompt:
 The playerImagePrompt should focus on facial details and expression that convey the character's personality and background. It should match the overall feel of the theme. Use this format: [character description with facial focus], [emotional state/expression], [lighting that enhances the face], [art style]. Keep it under 35 words total. It should not be anime or cartoonish.
 
+## Player Short Description:
+- The playerShortDescription should be a short visual description of the player character for image prompts. It should contain simple visual characteristics such as gender, hair color and length, skin color, and clothing. Keep it to no more than 10 words.
+- Use single, clear terms for race/ethnicity (Black, White, Asian, Hispanic, Native American, etc.) rather than complex or ambiguous terms like "biracial" or "mixed-race"
+
+Good examples:
+- "Black woman, short curly hair, blue security uniform"
+- "Asian man, long black hair, dark leather jacket"
+- "White woman, blonde bob, white lab coat"
+- "Hispanic man, bald, gray mechanic coveralls"
+
+Bad examples:
+- "Detective Sarah Chen" (uses name, no visual details)
+- "A mysterious and enigmatic figure shrouded in secrets" (too vague, no specific visuals)
+- "Experienced investigator with years of training in forensics" (describes skills, not appearance)
+- "Tall muscular cybernetic-enhanced former soldier with prosthetic arm and neural implants" (too long, too detailed)
+- "Biracial woman with ambiguous features" (complex/ambiguous racial description)
+
+## Plot Overview
 The plot should be rich enough to support multiple chapters of gameplay, with clear stakes, compelling characters, and meaningful choices. The player character should have a clear motivation and connection to the central conflict.
 
 Create a plot that will engage players through mystery, tension, and meaningful decision-making. The story should feel fresh and unique while fitting within the established theme.`
@@ -161,15 +183,42 @@ export const getRPGSystemPrompt = (plot: Plot) => {
 - Stay true to the established plot, character, and world - all story developments should align with ${plot.playerName}'s background and the central conflict
 
 ## Visual Descriptions:
-- The 'imagePrompt' should capture the most narratively important visual element of the current story moment. Focus on what drives the tension, conflict, or decision the player faces right now.
-- Use this format: [story-critical object/character/situation], [specific environment details], [mood-enhancing lighting], [art style]. Keep it under 35 words total.
-- Prioritize elements that are central to the current plot beat: the evidence they just discovered, the threatening figure blocking their path, the malfunctioning device they must fix, the choice they're contemplating
-- Include specific details that matter to the story: "bloodstained letter on mahogany desk", "hooded figure with glowing red eyes", "sparking control panel with warning lights"
-- The lighting should reinforce the current emotional/narrative tone: "ominous red warning lights", "harsh interrogation lighting", "soft golden sunrise", "eerie blue glow"
-- Choose art styles that enhance the story mood: "film noir shadows", "cyberpunk neon", "gothic horror atmosphere", "post-apocalyptic grit"
-- Good examples: "mysterious hooded stranger extending a data chip, rain-soaked alleyway, harsh neon lighting, cyberpunk noir" or "ancient tome with glowing runes, dusty library alcove, candlelit shadows, dark fantasy style"
-- Focus on what's dramatically significant to the story progression, not just what's visually present
-- The 'sceneDescription' should be a 2-sentence description of the current scene for narrative context.
+- The 'imagePrompt' should create a cinematic, atmospheric visual that captures the essence of the current story moment. Focus on creating a compelling scene that immerses the player in the narrative tension and emotional stakes.
+- Use this detailed format: [primary subject with specific details], [environmental context with texture/materials], [atmospheric elements], [lighting with direction and color], [camera angle/perspective], [art style with mood descriptors]. Aim for 40-50 words for rich detail.
+- **Character inclusion**: Only include character descriptions when they are the primary focus of the scene. For close-ups of objects, environments, or other non-character elements, omit character descriptions entirely. 
+- **When characters are included, never use character names - use their description ("${plot.playerShortDescription}") instead of their name**. NEVER use character names in the image prompt.
+- **Primary Subject Guidelines:**
+  - For characters: Include posture, expression, clothing details, and what they're doing/holding
+  - For objects: Describe material, condition, unique features, and relationship to the scene
+  - For environments: Focus on architectural details, scale, and key visual elements that set the mood
+  - **Important**: Describe the current state, not actions or transitions (use "standing" not "rising from chair", "holding gun" not "drawing weapon", "wounded" not "being injured")
+- **Environmental Context:**
+  - Include surface textures (rusted metal, polished marble, weathered wood, cracked concrete)
+  - Mention architectural styles (brutalist concrete, Victorian ornate, industrial minimalist)
+  - Add atmospheric particles (dust motes, smoke, rain, fog, sparks)
+  - Reference scale and depth (towering ceilings, cramped corridors, vast open spaces)
+- **Lighting Techniques:**
+  - Specify light sources (neon signs, candlelight, computer screens, emergency lighting, sunlight through windows)
+  - Include color temperature (warm amber, cold blue, harsh white, deep red)
+  - Describe shadows and highlights (dramatic chiaroscuro, soft rim lighting, harsh shadows)
+  - Use lighting to guide focus (spotlight effect, backlighting, selective illumination)
+- **Camera Perspective:**
+  - Choose angles that enhance drama (low angle for intimidation, high angle for vulnerability, dutch angle for unease)
+  - Specify framing (close-up for intimacy, wide shot for scope, medium shot for interaction)
+  - Consider depth of field (shallow focus for isolation, deep focus for context)
+- **Art Style Specifications:**
+  - Combine genre with technique: "cyberpunk digital painting with volumetric lighting"
+  - Include mood descriptors: "gritty realism with desaturated colors" or "gothic horror with deep shadows"
+  - Reference specific artistic influences when appropriate: "film noir cinematography" or "concept art illustration"
+- **Enhanced Examples:**
+  - "Weathered detective examining bloodstained evidence folder, cluttered police station desk with scattered papers and coffee stains, cigarette smoke drifting through harsh fluorescent lighting, low angle shot emphasizing intensity, gritty film noir realism with high contrast shadows"
+  - "Mysterious cloaked figure standing in doorway holding glowing data chip, rain-soaked neon-lit alleyway with reflective wet pavement, purple and blue cyberpunk lighting casting dramatic shadows, medium shot from street level, dark sci-fi concept art with volumetric light rays"
+  - "Ancient leather-bound tome with glowing runes open on ornate wooden lectern, dusty candlelit library with towering bookshelves, warm golden light dancing across aged parchment, close-up angled shot showing intricate details, dark fantasy oil painting style with rich textures"
+- **Context and Atmosphere:**
+  - Layer multiple atmospheric elements (weather, time of day, environmental hazards)
+  - Include sensory details that can be visualized (steam rising, papers scattered by wind, reflections in puddles)
+  - Reference the emotional tone through visual metaphors (storm clouds for tension, broken glass for danger)
+- The 'sceneDescription' should be a 2-3 sentence description that provides narrative context for the image, explaining what the player is experiencing and why this moment is significant to the story.
 
 ## Choice Design:
 - Present 3 compelling, unique choices that feel meaningfully different

@@ -48,7 +48,11 @@ export const RPGChat = ({
     schema: rpgSchema,
 
     onFinish: async (result) => {
-      console.log('onFinish', result)
+      console.log('turn complete', result.object)
+
+      if (result.error) {
+        console.error('onFinish error', result.error)
+      }
 
       addMessage({
         role: 'assistant',
@@ -78,23 +82,23 @@ export const RPGChat = ({
         setSceneDescription(object.sceneDescription!)
       }
 
-      if (object?.choices && object?.story) {
-        if (!isPlayingAudio) {
-          // setIsPlayingAudio(true)
-          // audioStreamer.play({
-          //   text: object.story,
-          //   onStart: () => console.log('Audio started'),
-          //   onEnd: () => {
-          //     console.log('Audio ended')
-          //     setIsPlayingAudio(false)
-          //   },
-          //   onError: (error) => {
-          //     console.error('Audio error:', error)
-          //     setIsPlayingAudio(false)
-          //   },
-          // })
-        }
-      }
+      // if (object?.choices && object?.story) {
+      //   if (!isPlayingAudio) {
+      //     setIsPlayingAudio(true)
+      //     audioStreamer.play({
+      //       text: object.story,
+      //       onStart: () => console.log('Audio started'),
+      //       onEnd: () => {
+      //         console.log('Audio ended')
+      //         setIsPlayingAudio(false)
+      //       },
+      //       onError: (error) => {
+      //         console.error('Audio error:', error)
+      //         setIsPlayingAudio(false)
+      //       },
+      //     })
+      //   }
+      // }
     }
   }, [object, isLoading])
 
@@ -115,6 +119,7 @@ export const RPGChat = ({
       const container = scrollContainerRef.current
       // Temporarily disable user scrolling detection during programmatic scroll
       isUserScrollingRef.current = false
+      console.log('scrolling to bottom', container.scrollHeight)
       container.scrollTop = container.scrollHeight
     }
   }
@@ -122,7 +127,7 @@ export const RPGChat = ({
   const isAtBottom = () => {
     if (!scrollContainerRef.current) return false
     const container = scrollContainerRef.current
-    const threshold = 50 // Allow for some tolerance
+    const threshold = 5 // Allow for some tolerance
     return container.scrollTop + container.clientHeight >= container.scrollHeight - threshold
   }
 
@@ -229,7 +234,7 @@ export const RPGChat = ({
       transition: {
         delay: 0.6,
         when: 'beforeChildren',
-        staggerChildren: 0.3,
+        staggerChildren: 0.09,
         duration: 0,
       },
     },
@@ -276,12 +281,11 @@ export const RPGChat = ({
             }}
           >
             <Stack minH="full">
-              <Stack gap="8" flex="1" p={{ base: '6', md: '12' }}>
+              <Stack gap="6" flex="1" p={{ base: '6', md: '9' }}>
                 {lastUserMessage && (
-                  <styled.pre hideBelow="md">
+                  <styled.pre hideBelow="md" lineHeight="1.4">
                     <styled.code
                       fontSize={{ base: '14px', md: '16px' }}
-                      lineHeight="1.5"
                       fontStyle="italic"
                       bg="var(--primary)"
                       color="var(--screen-bg)"
@@ -308,7 +312,7 @@ export const RPGChat = ({
                     animate="visible"
                     variants={list}
                     className={css({
-                      mt: { base: '-18px', md: '-12px' },
+                      mt: { base: '-18px', md: '-18px' },
                       mb: { base: '8px', md: '12px' },
                     })}
                   >
@@ -316,7 +320,7 @@ export const RPGChat = ({
                       <motion.li
                         key={option}
                         variants={item}
-                        className={css({ mt: { base: '16px', md: '24px' } })}
+                        className={css({ mt: { base: '4', md: '6' } })}
                       >
                         <RetroButton w="full" onClick={() => handleSubmit(option)}>
                           {option}
@@ -335,7 +339,7 @@ export const RPGChat = ({
         <Center
           position="absolute"
           top="0px"
-          left={{ base: '4', md: '8' }}
+          left="14px"
           h="full"
           fontSize={{ base: '14px', md: '18px' }}
           lineHeight="0"
@@ -360,10 +364,10 @@ export const RPGChat = ({
             name="message"
             type="text"
             w="full"
-            p={{ base: '4', md: '6' }}
+            p={{ base: '4', md: '4' }}
             px={{ base: '0', md: '6' }}
-            pl={{ base: '10', md: '16' }}
-            fontSize="16px"
+            pl={{ base: '8', md: '9' }}
+            fontSize="md"
             lineHeight="1"
             borderTop="1px solid {var(--primary)}"
             placeholder="Choose an option or type your own..."
@@ -373,8 +377,10 @@ export const RPGChat = ({
               outline: 'none',
             }}
             _placeholder={{
-              fontSize: { base: '14px', md: '16px' },
+              fontSize: { base: 'sm', md: 'md' },
             }}
+            // onFocus={() => setShowOptions(true)}
+            // onBlur={() => setShowOptions(false)}
           />
         </form>
       </Box>

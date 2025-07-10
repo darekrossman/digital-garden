@@ -6,6 +6,12 @@ export const plotSchema = z.object({
   playerName: z.string().describe('The name of the player.'),
   playerDescription: z.string().describe('A description of the player.'),
   playerImagePrompt: z.string().describe("A concise image prompt from the player's perspective."),
+  playerAge: z.number().describe('The age of the player.'),
+  playerGender: z.string().describe('The gender of the player.'),
+  playerRace: z.string().describe('The race of the player.'),
+  playerShortDescription: z
+    .string()
+    .describe('A short description of the player for image prompts.'),
 })
 
 export type Plot = z.infer<typeof plotSchema>

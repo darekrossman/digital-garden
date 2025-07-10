@@ -2,8 +2,7 @@ import { Box } from '@/styled-system/jsx'
 import './globals.css'
 import { css, cx } from '@/styled-system/css'
 import type { Metadata } from 'next'
-import { Silkscreen } from 'next/font/google'
-import { Major_Mono_Display } from 'next/font/google'
+import { Silkscreen, Major_Mono_Display, VT323 } from 'next/font/google'
 
 const silkscreen = Silkscreen({
   weight: ['400'],
@@ -17,6 +16,12 @@ const majorMonoDisplay = Major_Mono_Display({
   variable: '--fonts-major-mono',
 })
 
+const rpgFont = VT323({
+  weight: ['400'],
+  subsets: ['latin'],
+  variable: '--fonts-rpg',
+})
+
 export const metadata: Metadata = {
   title: 'Personal Portfolio of Darek Rossman',
   description: 'What you see is what you get.',
@@ -28,7 +33,10 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className={cx(silkscreen.variable, majorMonoDisplay.variable)}>
+    <html
+      lang="en"
+      className={cx(silkscreen.variable, majorMonoDisplay.variable, rpgFont.variable)}
+    >
       <body className={css({ position: 'relative' })}>
         <Box h="100dvh" position="relative" display="flex" flexDirection="column">
           {children}

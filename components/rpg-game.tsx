@@ -8,10 +8,10 @@ import { ImagePanel } from './image-panel'
 import { VideoCanvas } from './video-canvas'
 import { ImageFrame } from './image-frame'
 import { useGame } from './game-context'
-import { InventoryDialog } from './inventory'
+import { InfoDialog } from './info-dialog'
 
 export function RPGGame() {
-  const { plot } = useGame()
+  const { plot, setPlayerImage, setInfoDialogOpen } = useGame()
 
   const root = useRef<HTMLDivElement>(null)
   useGlitch(root)
@@ -22,8 +22,8 @@ export function RPGGame() {
 
   return (
     <Center w="full" h="full">
-      <Stack h="full" w="full" maxW="1200px" p={{ base: '0', md: '12' }}>
-        <Flex alignItems="center" justifyContent="start" w="full">
+      <Stack h="full" w="full" maxW="1160px" maxH="1160px" p={{ base: '0', md: '12' }}>
+        <Flex alignItems="center" justifyContent="start" w="full" hideBelow="md">
           <styled.h1 fontSize="16px" fontWeight="bold">
             {plot?.title}
           </styled.h1>
@@ -32,18 +32,18 @@ export function RPGGame() {
         <Grid
           ref={root}
           gridTemplateColumns={{ base: '1fr', md: '1fr 1fr' }}
+          gridTemplateRows={{ mdDown: '35dvh 1fr', md: '1fr' }}
           position="relative"
           flex="1"
-          gap={{ base: '0', md: '12' }}
+          gap={{ base: '0', md: '10' }}
           overflow="visible"
           minH="0"
           h="full"
           w="full"
-          maxH="1200px"
           opacity="0"
         >
           {/* Chat */}
-          <Box order={{ base: '2', md: '1' }} h="full" minH={{ mdDown: '56dvh', md: 0 }}>
+          <Box order={{ base: '2', md: '1' }} h="full" minH="0">
             <RPGChat />
           </Box>
 
@@ -51,33 +51,43 @@ export function RPGGame() {
           <Grid
             gridTemplateColumns="1fr"
             gridTemplateRows={{ base: '1fr', md: 'auto 1fr' }}
-            gap="12"
+            gap="10"
             minH="0"
             order={{ base: '1', md: '2' }}
           >
             <ImagePanel />
 
-            <Panel p="8" overflow="visible" hideBelow="md">
-              <Flex gap="8">
-                <Box w="140px" h="140px" position="relative" border="1px solid var(--primary)">
-                  <ImageFrame prompt={plot?.playerImagePrompt} minPixelSize={2} />
+            <Panel p="6" overflow="visible" hideBelow="md">
+              <Flex gap="6">
+                <Box
+                  w="140px"
+                  h="140px"
+                  position="relative"
+                  border="1px solid var(--primary)"
+                  onClick={() => setInfoDialogOpen('profile')}
+                >
+                  <ImageFrame
+                    prompt={plot?.playerImagePrompt}
+                    minPixelSize={3}
+                    onImageGenerated={setPlayerImage}
+                  />
                 </Box>
 
                 <Stack>
-                  <styled.p fontSize="16px">{plot?.playerName}</styled.p>
+                  <styled.p fontSize="lg">{plot?.playerName}</styled.p>
 
-                  <HStack fontSize="lg">
+                  <HStack fontSize="md">
                     HP:
                     <HStack gap="0">
-                      {Array.from({ length: 20 }, (_, i) => (
+                      {Array.from({ length: 10 }, (_, i) => (
                         <Box key={i}>▓</Box>
                       ))}
                     </HStack>
                   </HStack>
-                  <HStack fontSize="lg">
+                  <HStack fontSize="md">
                     MP:
                     <HStack gap="0">
-                      {Array.from({ length: 20 }, (_, i) => (
+                      {Array.from({ length: 10 }, (_, i) => (
                         <Box key={i}>▓</Box>
                       ))}
                     </HStack>
@@ -88,7 +98,7 @@ export function RPGGame() {
           </Grid>
         </Grid>
 
-        <InventoryDialog />
+        <InfoDialog />
 
         {/* <audio src="/audio/8-Bit Dark Music.mp3" autoPlay loop /> */}
       </Stack>
