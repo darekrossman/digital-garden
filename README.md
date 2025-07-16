@@ -9,6 +9,8 @@ A place for my tinkerings, playing with NextJS and Vercel's AI SDK and Gateway.
 #### screengrab
 ![alt text](public/rock-screencap.png)
 
+--- 
+
 ### Retro Interactive Fiction: https://garden.subpopular.dev/game
 - (WIP) Experimenting with LLMs and various image gen models (Flux, Stable Diffusion) to create a generative RPG, a bit of 'choose your own adventure' with endless possibilities. Retro-inspired UI with some fun UX details.
 - Needs some added security to prevent misuse - I'll keep the API credits topped up until then for anyone that's curious.
