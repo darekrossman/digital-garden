@@ -26,7 +26,7 @@ export default function Me() {
           textAlign="center"
           zIndex="1"
         >
-          <Link href="/">take me home</Link>
+          <Link href="/game">play a game</Link>
         </styled.p>
       </Box>
     </ViewTransition>

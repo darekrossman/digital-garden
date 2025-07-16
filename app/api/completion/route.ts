@@ -28,10 +28,13 @@ export async function POST(req: Request) {
       delayInMs: 10, // optional: defaults to 10ms
       chunking: 'line',
     }),
+    onFinish: (result) => {
+      console.log(result)
+    },
     onError({ error }) {
       console.error(error)
     },
   })
 
-  return result.toTextStreamResponse()
+  return result.toUIMessageStreamResponse()
 }
