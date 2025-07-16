@@ -1,4 +1,4 @@
-My place for some experiments, playing with NextJS and Vercel's AI SDK.
+My place for some experiments, playing with NextJS and Vercel's AI SDK and Gateway.
 
 About Me: https://garden.subpopular.dev
 - (WIP) Experimenting with LLM, using endless feedback and prompt engineering to tell my personaly story - with some added typographic tinkering and 3D rock.
