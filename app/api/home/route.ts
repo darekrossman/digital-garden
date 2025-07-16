@@ -1,17 +1,4 @@
-import { getRandomInt } from '@/lib/helpers'
-import { getSystemPrompt } from '@/lib/promptUtils'
-import { openai } from '@ai-sdk/openai'
-import { createTogetherAI } from '@ai-sdk/togetherai'
-import { smoothStream, streamText } from 'ai'
-
-const models = [
-  'meta-llama/Llama-3.3-70B-Instruct-Turbo',
-  'meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo',
-]
-
-const togetherai = createTogetherAI({
-  apiKey: process.env.TOGETHER_AI_API_KEY ?? '',
-})
+import { streamText } from 'ai'
 
 export async function POST(req: Request) {
   const {
@@ -24,16 +11,11 @@ export async function POST(req: Request) {
     systemPrompt?: string
   } = await req.json()
 
-  const model = openai('gpt-4.1')
-  // const model = togetherai(models[0])
-
-  console.log(model.modelId)
-
   const result = streamText({
-    model,
+    model: 'openai/gpt-4.1',
     system: systemPrompt,
     prompt,
-    maxTokens: maxTokens ?? 600,
+    maxOutputTokens: maxTokens ?? 600,
     temperature: 0.3,
     presencePenalty: 1,
     frequencyPenalty: 1,
@@ -46,5 +28,5 @@ export async function POST(req: Request) {
     },
   })
 
-  return result.toDataStreamResponse()
+  return result.toTextStreamResponse()
 }

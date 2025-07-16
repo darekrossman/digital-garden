@@ -1,6 +1,5 @@
 'use client'
 
-import { Leva, useControls } from 'leva'
 import { MotionValue } from 'motion'
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'

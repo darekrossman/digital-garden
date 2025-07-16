@@ -140,31 +140,30 @@ export default function LLMBlock({
     // setImageWidth(Math.random() * 375 + 100)
   }, [regenerateKey])
 
-  if (showImage) {
-    return (
-      <Box
-        position="absolute"
-        style={{
-          top: style?.top,
-          left: style?.left,
-          zIndex: style?.zIndex,
-          width: imageWidth,
-          mixBlendMode: 'multiply',
-          transform: style?.transform,
-          filter: style?.filter,
-        }}
-      >
-        <styled.div ref={rootRef}>
-          <ImageFrame
-            regenerateKey={regenerateKey}
-            onComplete={() => {
-              setIsStreaming(false)
-            }}
-          />
-        </styled.div>
-      </Box>
-    )
-  }
+  // if (showImage) {
+  //   return (
+  //     <Box
+  //       position="absolute"
+  //       style={{
+  //         top: style?.top,
+  //         left: style?.left,
+  //         zIndex: style?.zIndex,
+  //         width: imageWidth,
+  //         mixBlendMode: 'multiply',
+  //         transform: style?.transform,
+  //         filter: style?.filter,
+  //       }}
+  //     >
+  //       <styled.div ref={rootRef}>
+  //         <ImageFrame
+  //           onComplete={() => {
+  //             setIsStreaming(false)
+  //           }}
+  //         />
+  //       </styled.div>
+  //     </Box>
+  //   )
+  // }
 
   return (
     <Box style={style} {...props}>
