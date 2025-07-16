@@ -25,7 +25,6 @@ export const rpgSchema = z.object({
     2: z.string().describe('The second choice.'),
     3: z.string().describe('The third choice.'),
   }),
-  backgroundSound: z
-    .string()
-    .describe('A sound effect to play in the background that matches with the setting.'),
 })
+
+export type RPGObject = z.infer<typeof rpgSchema>

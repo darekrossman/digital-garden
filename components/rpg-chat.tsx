@@ -1,7 +1,7 @@
 'use client'
 
 import { rpgSchema } from '@/lib/rpg-schemas'
-import { Box, Center, Flex, Stack, styled } from '@/styled-system/jsx'
+import { Box, Center, Flex, HStack, Stack, styled } from '@/styled-system/jsx'
 import { experimental_useObject as useObject } from '@ai-sdk/react'
 import { useEffect, useRef, useState } from 'react'
 import { z } from 'zod'
@@ -12,8 +12,8 @@ import { Typewriter } from './typewriter'
 import { Panel } from './ui/panel'
 import * as motion from 'motion/react-client'
 import { css } from '@/styled-system/css'
-
-export type RPGObject = z.infer<typeof rpgSchema>
+import { RPGObject } from '@/lib/rpg-schemas'
+import { stack } from '@/styled-system/patterns'
 
 type RPGMessage = {
   id?: number
@@ -43,6 +43,9 @@ export const RPGChat = ({
   const [typewriterText, setTypewriterText] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
+  const [localMessages, setLocalMessages] = useState<(RPGObject | RPGMessage)[]>([])
+  const [visibleOptions, setVisibleOptions] = useState<string[]>([])
+
   const { object, submit, isLoading } = useObject({
     api: '/api/rpgchat',
     schema: rpgSchema,
@@ -54,10 +57,14 @@ export const RPGChat = ({
         console.error('onFinish error', result.error)
       }
 
-      addMessage({
-        role: 'assistant',
-        content: JSON.stringify(result.object),
-      })
+      if (result.object) {
+        setLocalMessages((prev) => [...prev, result.object!])
+
+        addMessage({
+          role: 'assistant',
+          content: JSON.stringify(result.object),
+        })
+      }
 
       onFinish?.(result.object!)
     },
@@ -113,13 +120,36 @@ export const RPGChat = ({
     }
   }, [])
 
+  useEffect(() => {
+    if (visibleOptions.length === 3) return
+
+    if (showOptions && object?.choices) {
+      let opts = Object.values(object.choices)
+      const interval = setInterval(() => {
+        if (opts.length > 0) {
+          setVisibleOptions((prev) => [...prev, opts.shift()!])
+          const atBottom = isAtBottom()
+
+          if (atBottom && !autoScroll) {
+            setAutoScroll(true)
+          }
+        } else {
+          clearInterval(interval)
+          setAutoScroll(false)
+        }
+      }, 500)
+      return () => clearInterval(interval)
+    } else {
+      setVisibleOptions([])
+    }
+  }, [showOptions, object?.choices])
+
   // Auto-scroll functionality
   const scrollToBottom = () => {
     if (scrollContainerRef.current && autoScroll) {
       const container = scrollContainerRef.current
       // Temporarily disable user scrolling detection during programmatic scroll
       isUserScrollingRef.current = false
-      console.log('scrolling to bottom', container.scrollHeight)
       container.scrollTop = container.scrollHeight
     }
   }
@@ -127,7 +157,7 @@ export const RPGChat = ({
   const isAtBottom = () => {
     if (!scrollContainerRef.current) return false
     const container = scrollContainerRef.current
-    const threshold = 5 // Allow for some tolerance
+    const threshold = 1 // Allow for some tolerance
     return container.scrollTop + container.clientHeight >= container.scrollHeight - threshold
   }
 
@@ -146,15 +176,36 @@ export const RPGChat = ({
   }
 
   // Auto-scroll when content changes
+  // useEffect(() => {
+  //   if (autoScroll) {
+  //     // Use a small delay to ensure content is rendered
+  //     const timer = setTimeout(() => {
+  //       scrollToBottom()
+  //     }, 10)
+  //     return () => clearTimeout(timer)
+  //   }
+  // }, [object?.story, object?.choices, showOptions, autoScroll, typewriterText])
+
   useEffect(() => {
+    let timer: NodeJS.Timeout | null = null
+
     if (autoScroll) {
       // Use a small delay to ensure content is rendered
-      const timer = setTimeout(() => {
+      timer = setInterval(() => {
         scrollToBottom()
       }, 10)
-      return () => clearTimeout(timer)
+    } else {
+      if (timer) {
+        clearInterval(timer)
+      }
     }
-  }, [object?.story, object?.choices, showOptions, autoScroll, typewriterText])
+
+    return () => {
+      if (timer) {
+        clearInterval(timer)
+      }
+    }
+  }, [autoScroll])
 
   // Reset auto-scroll when content is cleared (new game/conversation)
   useEffect(() => {
@@ -218,7 +269,9 @@ export const RPGChat = ({
     const msg: RPGMessage = { role: 'user', content: selectedChoice }
     const newMessages = [...messages, msg]
     addMessage(msg)
+    setLocalMessages((prev) => [...prev, msg])
     submit({ messages: newMessages })
+    setVisibleOptions([])
     setShowOptions(false)
 
     // Blur input field to hide mobile keyboard
@@ -229,27 +282,29 @@ export const RPGChat = ({
   }
 
   const list = {
-    visible: {
-      opacity: 1,
-      transition: {
-        delay: 0.6,
-        when: 'beforeChildren',
-        staggerChildren: 0.09,
-        duration: 0,
-      },
-    },
-    hidden: {
-      opacity: 0,
-      transition: {
-        when: 'afterChildren',
-        duration: 0,
-      },
-    },
+    // visible: {
+    //   display: 'block',
+    //   opacity: 1,
+    //   transition: {
+    //     delay: 0.6,
+    //     when: 'beforeChildren',
+    //     staggerChildren: 0.8,
+    //     duration: 0,
+    //   },
+    // },
+    // hidden: {
+    //   display: 'none',
+    //   opacity: 0,
+    //   transition: {
+    //     when: 'afterChildren',
+    //     duration: 0,
+    //   },
+    // },
   }
 
   const item = {
-    visible: { opacity: 1, transition: { duration: 0 } },
-    hidden: { opacity: 0, transition: { duration: 0 } },
+    // visible: { opacity: 1, height: 'auto', overflow: 'visible', transition: { duration: 0 } },
+    // hidden: { opacity: 0.4, height: 0, overflow: 'hidden', transition: { duration: 0 } },
   }
 
   return (
@@ -282,19 +337,33 @@ export const RPGChat = ({
           >
             <Stack minH="full">
               <Stack gap="6" flex="1" p={{ base: '6', md: '9' }}>
-                {lastUserMessage && (
-                  <styled.pre hideBelow="md" lineHeight="1.4">
-                    <styled.code
-                      fontSize={{ base: '14px', md: '16px' }}
-                      fontStyle="italic"
-                      bg="var(--primary)"
-                      color="var(--screen-bg)"
+                {localMessages.map((message, idx) => {
+                  const isLastMessage = idx === localMessages.length - 1
+                  let text = null
+                  if ('story' in message && !isLastMessage) {
+                    text = message.story
+                  }
+
+                  if ('role' in message && message.role === 'user') {
+                    text = (
+                      <HStack alignItems="flex-start">
+                        <Box mt="-1px">{'>'}</Box>
+                        <styled.p lineHeight="1.4">{message.content}</styled.p>
+                      </HStack>
+                    )
+                  }
+
+                  return text ? (
+                    <styled.div
+                      fontSize={{ base: 'sm', md: 'md' }}
+                      lineHeight="1.5"
                       whiteSpace="pre-wrap"
+                      key={idx}
                     >
-                      {lastUserMessage}
-                    </styled.code>
-                  </styled.pre>
-                )}
+                      {text}
+                    </styled.div>
+                  ) : null
+                })}
 
                 <Typewriter
                   text={object?.story || ''}
@@ -304,24 +373,18 @@ export const RPGChat = ({
                   onTextChange={(displayedText) => {
                     setTypewriterText(displayedText)
                   }}
+                  speed={75}
                 />
 
-                {object?.choices && showOptions && (
+                {visibleOptions.length > 0 && (
                   <motion.ul
                     initial="hidden"
                     animate="visible"
                     variants={list}
-                    className={css({
-                      mt: { base: '-18px', md: '-18px' },
-                      mb: { base: '8px', md: '12px' },
-                    })}
+                    className={stack({ gap: '5' })}
                   >
-                    {Object.values(object?.choices ?? {}).map((option: string) => (
-                      <motion.li
-                        key={option}
-                        variants={item}
-                        className={css({ mt: { base: '4', md: '6' } })}
-                      >
+                    {visibleOptions.map((option: string) => (
+                      <motion.li key={option} variants={item}>
                         <RetroButton w="full" onClick={() => handleSubmit(option)}>
                           {option}
                         </RetroButton>
@@ -379,8 +442,6 @@ export const RPGChat = ({
             _placeholder={{
               fontSize: { base: 'sm', md: 'md' },
             }}
-            // onFocus={() => setShowOptions(true)}
-            // onBlur={() => setShowOptions(false)}
           />
         </form>
       </Box>

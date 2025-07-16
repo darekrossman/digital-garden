@@ -20,7 +20,7 @@ export function ProfileTab() {
           )}
         </Box>
         <Stack
-          gap="6"
+          gap="4"
           h="full"
           flex="1"
           overflowY="auto"

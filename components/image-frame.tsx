@@ -201,7 +201,7 @@ export function ImageFrame({
   const runStream = async (prompt: string) => {
     const { output } = await generateImage(prompt)
     const img = new Image()
-
+    console.log('output', output)
     onImageGenerated?.(output)
 
     img.src = output
@@ -219,7 +219,7 @@ export function ImageFrame({
     }
 
     if (prevPromptRef.current !== prompt) {
-      console.log('generating image')
+      console.log('generating image', prompt)
       runStream(prompt)
       prevPromptRef.current = prompt
     }

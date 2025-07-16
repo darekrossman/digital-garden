@@ -141,6 +141,7 @@ export const Typewriter = ({
           h="1em"
           bg="var(--primary)"
           ml="1px"
+          mr="-10px"
           opacity={showCursor ? 1 : 0}
           verticalAlign="-2px"
           transition="opacity 0.2s ease"

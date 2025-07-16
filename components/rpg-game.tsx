@@ -22,16 +22,25 @@ export function RPGGame() {
 
   return (
     <Center w="full" h="full">
-      <Stack h="full" w="full" maxW="1160px" maxH="1160px" p={{ base: '0', md: '12' }}>
-        <Flex alignItems="center" justifyContent="start" w="full" hideBelow="md">
-          <styled.h1 fontSize="16px" fontWeight="bold">
+      <Stack h="full" w="full" maxW="1240px" maxH="1160px" p={{ base: '0', md: '12' }} gap="10">
+        <Flex alignItems="center" justifyContent="space-between" w="full" bg="var(--primary)">
+          <styled.h1 fontSize="16px" fontWeight="bold" color="var(--screen-bg)">
             {plot?.title}
           </styled.h1>
+
+          <styled.button
+            fontSize="16px"
+            fontWeight="bold"
+            color="var(--screen-bg)"
+            onClick={() => setInfoDialogOpen(true)}
+          >
+            [CTRL+I] Menu
+          </styled.button>
         </Flex>
 
         <Grid
           ref={root}
-          gridTemplateColumns={{ base: '1fr', md: '1fr 1fr' }}
+          gridTemplateColumns={{ base: '1fr', md: '57% 1fr' }}
           gridTemplateRows={{ mdDown: '35dvh 1fr', md: '1fr' }}
           position="relative"
           flex="1"
@@ -68,7 +77,7 @@ export function RPGGame() {
                 >
                   <ImageFrame
                     prompt={plot?.playerImagePrompt}
-                    minPixelSize={3}
+                    minPixelSize={2}
                     onImageGenerated={setPlayerImage}
                   />
                 </Box>
