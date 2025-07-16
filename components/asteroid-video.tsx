@@ -214,6 +214,9 @@ export function AsteroidVideo(props: HTMLStyledProps<'video'>) {
         zIndex={99}
         bg="black"
         color="white"
+        fontSize="12px"
+        py="2px"
+        px="4px"
         onClick={() => setPause(!pause)}
       >
         {pause ? 'RESUME' : 'PAUSE'}
