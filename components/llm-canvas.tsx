@@ -25,23 +25,17 @@ export function LLMCanvas({
   const isGeneratingRef = useRef(false)
   const regenKeyRef = useRef(regenerateKey || 0)
 
-  const { completion, complete, handleSubmit, data } = useCompletion({
+  const { completion, complete } = useCompletion({
     api: '/api/completion',
     body: {
       maxTokens: Math.floor(Math.random() * 400) + 200,
     },
-    onResponse: (response: Response) => {
-      console.log('Received response from server:', response)
-    },
-    onFinish: (completion) => {
-      console.log('onFinish', completion)
+    onFinish: (prompt, completion) => {
       isGeneratingRef.current = false
       currentCompletionRef.current = completion
       onComplete?.(completion)
     },
   })
-
-  console.log('completion', data)
 
   const generate = (probability = 0.3) => {
     if (isGeneratingRef.current) {

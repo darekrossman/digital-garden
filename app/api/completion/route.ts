@@ -19,7 +19,8 @@ export async function POST(req: Request) {
     `${getSystemPrompt()}\n\nYou never use emojis. You never include confirmation language or follow up questions. You always focus purely on the result and nothing else.`
 
   const result = streamText({
-    model: 'meta/llama-3.1-8b',
+    // model: 'meta/llama-3.1-8b',
+    model: 'openai/gpt-4.1',
     system,
     prompt,
     maxOutputTokens: maxTokens ?? 600,
