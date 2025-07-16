@@ -4,7 +4,7 @@ A place for my tinkerings, playing with NextJS and Vercel's AI SDK and Gateway.
 ---
 
 ### About Me: https://garden.subpopular.dev
-- (WIP) Experimenting with LLM, using endless feedback and prompt engineering to tell my personaly story - with some added typographic tinkering and 3D rock.
+- (WIP) Experimenting with LLMs, using generative feedback loops and prompt chopping to tell my personal story - with some added typographic tinkering and a 3D rock.
 
 #### screengrab
 <img src="public/rock-screencap.png" width="375" />
