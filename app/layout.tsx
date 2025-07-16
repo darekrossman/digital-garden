@@ -3,6 +3,7 @@ import './globals.css'
 import { css, cx } from '@/styled-system/css'
 import type { Metadata } from 'next'
 import { Silkscreen, Major_Mono_Display, VT323 } from 'next/font/google'
+import { Analytics } from '@vercel/analytics/next'
 
 const silkscreen = Silkscreen({
   weight: ['400'],
@@ -41,6 +42,8 @@ export default function RootLayout({
         <Box h="100dvh" position="relative" display="flex" flexDirection="column">
           {children}
         </Box>
+
+        <Analytics />
       </body>
     </html>
   )
